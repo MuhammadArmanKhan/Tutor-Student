@@ -51,6 +51,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event, session?.user?.id);
+      
       if (event === 'SIGNED_IN' && session?.user) {
         try {
           const userProfile = await dbHelpers.getUserWithProfile(session.user.id);
@@ -81,20 +83,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password: string, role: string) => {
     try {
+      console.log('Attempting sign in for:', email);
+
       // First check if user exists in our custom table
       const { data: existingUser, error: userCheckError } = await supabase
         .from('users')
         .select('*')
         .eq('email', email)
-        .single();
+        .maybeSingle();
 
-      if (userCheckError && userCheckError.code !== 'PGRST116') {
+      if (userCheckError) {
+        console.error('Database error:', userCheckError);
         throw new Error('Database error occurred. Please try again.');
       }
 
       if (!existingUser) {
         throw new Error('No account found with this email. Please sign up first.');
       }
+
+      console.log('User found in database:', existingUser.id);
 
       // Use Supabase authentication
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
@@ -103,13 +110,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (authError) {
+        console.error('Auth error:', authError);
         if (authError.message.includes('Invalid login credentials')) {
           throw new Error('Invalid email or password. Please check your credentials and try again.');
         }
-        throw authError;
+        throw new Error(authError.message);
       }
 
       if (authData.user) {
+        console.log('Authentication successful:', authData.user.id);
+        
         const userData: User = {
           id: existingUser.id,
           email: existingUser.email,
@@ -136,34 +146,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUp = async (userData: any) => {
     try {
+      console.log('Attempting sign up for:', userData.email);
+
       // Check if user already exists in our custom table
       const { data: existingUser, error: userCheckError } = await supabase
         .from('users')
         .select('id')
         .eq('email', userData.email)
-        .single();
+        .maybeSingle();
+
+      if (userCheckError) {
+        console.error('Database check error:', userCheckError);
+        throw new Error('Database error occurred. Please try again.');
+      }
 
       if (existingUser) {
         throw new Error('An account with this email already exists. Please sign in instead.');
       }
+
+      console.log('Email is available, proceeding with signup');
 
       // Use Supabase authentication
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: userData.email,
         password: userData.password || 'defaultpassword123',
         options: {
-          emailRedirectTo: undefined
+          emailRedirectTo: undefined,
+          data: {
+            name: userData.name || userData.parentName,
+            role: userData.role
+          }
         }
       });
 
       if (authError) {
+        console.error('Auth signup error:', authError);
         if (authError.message.includes('already registered') || authError.message.includes('user_already_exists')) {
           throw new Error('An account with this email already exists. Please sign in instead.');
         }
-        throw authError;
+        throw new Error(authError.message);
       }
 
       if (authData.user) {
+        console.log('Auth user created:', authData.user.id);
+
         // Create user profile in our custom table
         const mockUser = {
           id: authData.user.id,
@@ -175,16 +201,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           updated_at: new Date().toISOString()
         };
         
+        console.log('Creating user profile:', mockUser);
+
         // Save to database with proper error handling
         const { error: userError } = await supabase
           .from('users')
           .insert(mockUser);
 
         if (userError) {
+          console.error('User profile creation error:', userError);
           // If user creation fails, clean up auth user
           await supabase.auth.signOut();
           throw new Error('Failed to create user profile. Please try again.');
         }
+
+        console.log('User profile created successfully');
 
         // Create role-specific profile
         try {
@@ -203,7 +234,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 created_at: new Date().toISOString()
               });
 
-            if (profileError) throw profileError;
+            if (profileError) {
+              console.warn('Tutor profile creation warning:', profileError);
+            }
           } else if (userData.role === 'student' || userData.role === 'parent') {
             const { error: profileError } = await supabase
               .from('student_profiles')
@@ -216,7 +249,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 created_at: new Date().toISOString()
               });
 
-            if (profileError) throw profileError;
+            if (profileError) {
+              console.warn('Student profile creation warning:', profileError);
+            }
           }
         } catch (profileError) {
           console.warn('Profile creation warning:', profileError);
@@ -240,6 +275,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         setUser(finalUser);
         localStorage.setItem('edusync_user', JSON.stringify(finalUser));
+        
+        console.log('Signup completed successfully');
       }
     } catch (error) {
       console.error('Sign up error:', error);
