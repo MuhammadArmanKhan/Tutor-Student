@@ -18,6 +18,7 @@ interface AuthContextType {
   signUp: (userData: any) => Promise<void>;
   signOut: () => void;
   updateUser: (userData: Partial<User>) => Promise<void>;
+  demoLogin: (role: 'tutor' | 'student') => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -55,19 +56,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (event === 'SIGNED_IN' && session?.user) {
         try {
-          const userProfile = await dbHelpers.getUserWithProfile(session.user.id);
-          
-          if (userProfile?.user) {
-            const userData: User = {
-              id: userProfile.user.id,
-              email: userProfile.user.email,
-              name: userProfile.user.name,
-              role: userProfile.user.role,
-              profileComplete: userProfile.user.profile_complete,
-              avatar_url: userProfile.user.avatar_url
+          // Get user from our custom table
+          const { data: userData, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+
+          if (userData && !error) {
+            const user: User = {
+              id: userData.id,
+              email: userData.email,
+              name: userData.name,
+              role: userData.role,
+              profileComplete: userData.profile_complete,
+              avatar_url: userData.avatar_url
             };
-            setUser(userData);
-            localStorage.setItem('edusync_user', JSON.stringify(userData));
+            setUser(user);
+            localStorage.setItem('edusync_user', JSON.stringify(user));
+          } else {
+            console.error('User not found in database:', error);
           }
         } catch (error) {
           console.error('Error loading user profile:', error);
@@ -81,27 +89,92 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => subscription.unsubscribe();
   }, []);
 
-  const signIn = async (email: string, password: string, role: string) => {
+  const demoLogin = async (role: 'tutor' | 'student') => {
     try {
-      console.log('Attempting sign in for:', email);
+      const demoCredentials = {
+        tutor: { email: 'tutor@example.com', password: 'demo123' },
+        student: { email: 'student@example.com', password: 'demo123' }
+      };
 
-      // First check if user exists in our custom table
-      const { data: existingUser, error: userCheckError } = await supabase
+      const { email, password } = demoCredentials[role];
+      
+      // First check if user exists in our database
+      const { data: existingUser, error: userError } = await supabase
         .from('users')
         .select('*')
         .eq('email', email)
-        .maybeSingle();
+        .single();
 
-      if (userCheckError) {
-        console.error('Database error:', userCheckError);
-        throw new Error('Database error occurred. Please try again.');
+      if (userError || !existingUser) {
+        throw new Error('Demo user not found. Please contact support.');
       }
 
-      if (!existingUser) {
-        throw new Error('No account found with this email. Please sign up first.');
+      // Try to sign in with Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (authError) {
+        // If auth user doesn't exist, create it
+        if (authError.message.includes('Invalid login credentials')) {
+          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              emailRedirectTo: undefined
+            }
+          });
+
+          if (signUpError) throw signUpError;
+          
+          // Update the auth user ID in our database
+          if (signUpData.user) {
+            await supabase
+              .from('users')
+              .update({ id: signUpData.user.id })
+              .eq('email', email);
+          }
+        } else {
+          throw authError;
+        }
       }
 
-      console.log('User found in database:', existingUser.id);
+      const userData: User = {
+        id: existingUser.id,
+        email: existingUser.email,
+        name: existingUser.name,
+        role: existingUser.role,
+        profileComplete: existingUser.profile_complete,
+        avatar_url: existingUser.avatar_url
+      };
+
+      setUser(userData);
+      localStorage.setItem('edusync_user', JSON.stringify(userData));
+    } catch (error) {
+      console.error('Demo login error:', error);
+      throw new Error(error instanceof Error ? error.message : 'Demo login failed');
+    }
+  };
+
+  const signIn = async (email: string, password: string, role: string) => {
+    try {
+      console.log('Attempting sign in for:', email, role);
+
+      // First check if user exists in our database
+      const { data: existingUser, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .single();
+
+      if (userError || !existingUser) {
+        throw new Error('User not found. Please check your email or sign up first.');
+      }
+
+      if (existingUser.role !== role) {
+        throw new Error(`This account is registered as a ${existingUser.role}, not a ${role}.`);
+      }
 
       // Use Supabase authentication
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
@@ -110,16 +183,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (authError) {
-        console.error('Auth error:', authError);
         if (authError.message.includes('Invalid login credentials')) {
           throw new Error('Invalid email or password. Please check your credentials and try again.');
         }
-        throw new Error(authError.message);
+        throw authError;
       }
 
       if (authData.user) {
-        console.log('Authentication successful:', authData.user.id);
-        
+        // Update last login
+        await supabase
+          .from('users')
+          .update({ last_login: new Date().toISOString() })
+          .eq('id', existingUser.id);
+
         const userData: User = {
           id: existingUser.id,
           email: existingUser.email,
@@ -128,12 +204,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           profileComplete: existingUser.profile_complete,
           avatar_url: existingUser.avatar_url
         };
-
-        // Update last login
-        await supabase
-          .from('users')
-          .update({ last_login: new Date().toISOString() })
-          .eq('id', existingUser.id);
 
         setUser(userData);
         localStorage.setItem('edusync_user', JSON.stringify(userData));
@@ -146,52 +216,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUp = async (userData: any) => {
     try {
-      console.log('Attempting sign up for:', userData.email);
+      console.log('Attempting sign up for:', userData.email, userData.role);
 
-      // Check if user already exists in our custom table
-      const { data: existingUser, error: userCheckError } = await supabase
+      // Check if user already exists in our database
+      const { data: existingUser } = await supabase
         .from('users')
-        .select('id')
+        .select('email')
         .eq('email', userData.email)
-        .maybeSingle();
-
-      if (userCheckError) {
-        console.error('Database check error:', userCheckError);
-        throw new Error('Database error occurred. Please try again.');
-      }
+        .single();
 
       if (existingUser) {
         throw new Error('An account with this email already exists. Please sign in instead.');
       }
-
-      console.log('Email is available, proceeding with signup');
 
       // Use Supabase authentication
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: userData.email,
         password: userData.password || 'defaultpassword123',
         options: {
-          emailRedirectTo: undefined,
-          data: {
-            name: userData.name || userData.parentName,
-            role: userData.role
-          }
+          emailRedirectTo: undefined
         }
       });
 
       if (authError) {
-        console.error('Auth signup error:', authError);
         if (authError.message.includes('already registered') || authError.message.includes('user_already_exists')) {
           throw new Error('An account with this email already exists. Please sign in instead.');
         }
-        throw new Error(authError.message);
+        throw authError;
       }
 
       if (authData.user) {
-        console.log('Auth user created:', authData.user.id);
-
         // Create user profile in our custom table
-        const mockUser = {
+        const newUser = {
           id: authData.user.id,
           email: userData.email,
           name: userData.name || userData.parentName,
@@ -201,21 +257,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           updated_at: new Date().toISOString()
         };
         
-        console.log('Creating user profile:', mockUser);
-
-        // Save to database with proper error handling
         const { error: userError } = await supabase
           .from('users')
-          .insert(mockUser);
+          .insert(newUser);
 
         if (userError) {
-          console.error('User profile creation error:', userError);
-          // If user creation fails, clean up auth user
-          await supabase.auth.signOut();
+          console.error('User creation error:', userError);
           throw new Error('Failed to create user profile. Please try again.');
         }
-
-        console.log('User profile created successfully');
 
         // Create role-specific profile
         try {
@@ -235,7 +284,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               });
 
             if (profileError) {
-              console.warn('Tutor profile creation warning:', profileError);
+              console.warn('Tutor profile creation failed:', profileError);
             }
           } else if (userData.role === 'student' || userData.role === 'parent') {
             const { error: profileError } = await supabase
@@ -250,7 +299,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               });
 
             if (profileError) {
-              console.warn('Student profile creation warning:', profileError);
+              console.warn('Student profile creation failed:', profileError);
             }
           }
         } catch (profileError) {
@@ -260,23 +309,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Send welcome email
         try {
-          await emailService.sendWelcomeEmail(mockUser.email, mockUser.name, mockUser.role);
+          await emailService.sendWelcomeEmail(newUser.email, newUser.name, newUser.role);
         } catch (emailError) {
           console.warn('Failed to send welcome email:', emailError);
         }
         
         const finalUser: User = {
-          id: mockUser.id,
-          email: mockUser.email,
-          name: mockUser.name,
-          role: mockUser.role,
-          profileComplete: mockUser.profile_complete
+          id: newUser.id,
+          email: newUser.email,
+          name: newUser.name,
+          role: newUser.role,
+          profileComplete: newUser.profile_complete
         };
 
         setUser(finalUser);
         localStorage.setItem('edusync_user', JSON.stringify(finalUser));
-        
-        console.log('Signup completed successfully');
       }
     } catch (error) {
       console.error('Sign up error:', error);
@@ -324,6 +371,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signUp,
     signOut,
     updateUser,
+    demoLogin,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

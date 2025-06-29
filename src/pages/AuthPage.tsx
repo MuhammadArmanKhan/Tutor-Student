@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Brain, Sparkles, ArrowLeft, Mail, Lock, User, UserCheck, ChevronDown } from 'lucide-react';
+import { Brain, Sparkles, ArrowLeft, Mail, Lock, User, UserCheck, ChevronDown, Zap } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
@@ -18,49 +18,53 @@ const AuthPage: React.FC = () => {
   });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, demoLogin } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Basic validation
+    if (!formData.email || !formData.password) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    if (!isLogin && !formData.name && !formData.parentName) {
+      toast.error('Please enter your name');
+      return;
+    }
+
     setLoading(true);
 
     try {
       if (isLogin) {
         await signIn(formData.email, formData.password, formData.role);
         toast.success('Welcome back!');
-        
-        // Navigate based on role
-        if (formData.role === 'tutor') {
-          navigate('/tutor-dashboard');
-        } else {
-          navigate('/student-dashboard');
-        }
+        navigate(formData.role === 'tutor' ? '/tutor-dashboard' : '/student-dashboard');
       } else {
-        // Validate required fields for signup
-        if (!formData.email || !formData.password) {
-          toast.error('Email and password are required');
-          return;
-        }
-
-        if (!formData.name && !formData.parentName) {
-          toast.error('Name is required');
-          return;
-        }
-
         await signUp(formData);
         toast.success('Account created successfully!');
-        
-        // Navigate based on role
-        if (formData.role === 'tutor') {
-          navigate('/tutor-dashboard');
-        } else {
-          navigate('/student-dashboard');
-        }
+        navigate(formData.role === 'tutor' ? '/tutor-dashboard' : '/student-dashboard');
       }
     } catch (error) {
-      console.error('Authentication error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Authentication failed. Please try again.';
       toast.error(errorMessage);
+      console.error('Auth error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDemoLogin = async (role: 'tutor' | 'student') => {
+    setLoading(true);
+    try {
+      await demoLogin(role);
+      toast.success(`Welcome to the demo ${role} account!`);
+      navigate(role === 'tutor' ? '/tutor-dashboard' : '/student-dashboard');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Demo login failed';
+      toast.error(errorMessage);
+      console.error('Demo login error:', error);
     } finally {
       setLoading(false);
     }
@@ -71,31 +75,6 @@ const AuthPage: React.FC = () => {
       ...formData,
       [e.target.name]: e.target.value,
     });
-  };
-
-  // Demo login function
-  const demoLogin = async (role: 'tutor' | 'student') => {
-    setLoading(true);
-    try {
-      const demoCredentials = {
-        tutor: { email: 'tutor@example.com', password: 'demo123' },
-        student: { email: 'student@example.com', password: 'demo123' }
-      };
-
-      await signIn(demoCredentials[role].email, demoCredentials[role].password, role);
-      toast.success(`Welcome to the ${role} demo!`);
-      
-      if (role === 'tutor') {
-        navigate('/tutor-dashboard');
-      } else {
-        navigate('/student-dashboard');
-      }
-    } catch (error) {
-      console.error('Demo login error:', error);
-      toast.error('Demo login failed. Please try manual signup.');
-    } finally {
-      setLoading(false);
-    }
   };
 
   return (
@@ -150,36 +129,33 @@ const AuthPage: React.FC = () => {
           </div>
 
           {/* Demo Login Buttons */}
-          <div className="mb-6 space-y-3">
-            <p className="text-center text-sm text-gray-400 mb-3">Quick Demo Access:</p>
+          <div className="mb-6">
+            <div className="flex items-center justify-center space-x-2 mb-4">
+              <Zap className="h-4 w-4 text-accent-emerald" />
+              <span className="text-sm text-gray-400">Quick Demo Access</span>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <motion.button
-                onClick={() => demoLogin('tutor')}
+                onClick={() => handleDemoLogin('tutor')}
                 disabled={loading}
-                className="bg-gradient-to-r from-primary-500/20 to-primary-600/20 text-primary-400 border border-primary-500/30 py-2 px-4 rounded-lg text-sm font-medium hover:bg-primary-500/30 transition-all duration-200 disabled:opacity-50"
+                className="bg-gradient-to-r from-primary-500/20 to-primary-600/20 border border-primary-500/30 text-primary-400 py-3 px-4 rounded-xl font-medium hover:bg-primary-500/30 transition-all duration-200 disabled:opacity-50 text-sm"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
                 Demo Tutor
               </motion.button>
               <motion.button
-                onClick={() => demoLogin('student')}
+                onClick={() => handleDemoLogin('student')}
                 disabled={loading}
-                className="bg-gradient-to-r from-accent-emerald/20 to-green-600/20 text-accent-emerald border border-accent-emerald/30 py-2 px-4 rounded-lg text-sm font-medium hover:bg-accent-emerald/30 transition-all duration-200 disabled:opacity-50"
+                className="bg-gradient-to-r from-accent-emerald/20 to-accent-emerald/30 border border-accent-emerald/30 text-accent-emerald py-3 px-4 rounded-xl font-medium hover:bg-accent-emerald/30 transition-all duration-200 disabled:opacity-50 text-sm"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
                 Demo Student
               </motion.button>
             </div>
-          </div>
-
-          <div className="relative mb-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-white/10"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-dark-900 text-gray-400">Or continue with</span>
+            <div className="text-center mt-3">
+              <span className="text-xs text-gray-500">Or use the form below</span>
             </div>
           </div>
 
@@ -309,6 +285,15 @@ const AuthPage: React.FC = () => {
             >
               {isLogin ? 'Sign Up' : 'Sign In'}
             </button>
+          </div>
+
+          {/* Demo Credentials Info */}
+          <div className="mt-6 p-4 bg-white/5 rounded-xl border border-white/10">
+            <h4 className="text-sm font-medium text-white mb-2">Demo Credentials:</h4>
+            <div className="text-xs text-gray-400 space-y-1">
+              <div>Tutor: tutor@example.com / demo123</div>
+              <div>Student: student@example.com / demo123</div>
+            </div>
           </div>
         </motion.div>
       </div>
