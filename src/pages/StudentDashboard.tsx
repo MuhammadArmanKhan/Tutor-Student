@@ -5,7 +5,8 @@ import OverviewTab from '../components/dashboard/student/OverviewTab';
 import SessionsTab from '../components/dashboard/student/SessionsTab';
 import TutorsTab from '../components/dashboard/student/TutorsTab';
 import AnalyticsTab from '../components/dashboard/student/AnalyticsTab';
-import { Home, Video, Users, BarChart3, Settings, Calendar, MessageCircle } from 'lucide-react';
+import StudentProgressDashboard from '../components/analytics/StudentProgressDashboard';
+import { Home, Video, Users, BarChart3, Settings, Calendar, MessageCircle, TrendingUp } from 'lucide-react';
 
 const StudentDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -14,6 +15,7 @@ const StudentDashboard: React.FC = () => {
     { id: 'overview', label: 'Overview', icon: Home },
     { id: 'sessions', label: 'Sessions', icon: Video, count: 12 },
     { id: 'tutors', label: 'My Tutors', icon: Users, count: 3 },
+    { id: 'progress', label: 'Progress', icon: TrendingUp },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'schedule', label: 'Schedule', icon: Calendar },
     { id: 'messages', label: 'Messages', icon: MessageCircle, count: 2 },
@@ -28,6 +30,8 @@ const StudentDashboard: React.FC = () => {
         return <SessionsTab />;
       case 'tutors':
         return <TutorsTab />;
+      case 'progress':
+        return <StudentProgressDashboard />;
       case 'analytics':
         return <AnalyticsTab />;
       case 'schedule':

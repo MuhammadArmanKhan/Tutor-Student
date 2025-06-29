@@ -6,6 +6,7 @@ import AuthPage from './pages/AuthPage';
 import StudentDashboard from './pages/StudentDashboard';
 import TutorDashboard from './pages/TutorDashboard';
 import SessionPage from './pages/SessionPage';
+import SessionMonitoringPage from './components/session/SessionMonitoringPage';
 import { AuthProvider } from './contexts/AuthContext';
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
             <Route path="/student-dashboard" element={<StudentDashboard />} />
             <Route path="/tutor-dashboard" element={<TutorDashboard />} />
             <Route path="/session/:sessionId" element={<SessionPage />} />
+            <Route path="/monitor/:sessionId" element={<SessionMonitoringPage />} />
           </Routes>
           <Toaster 
             position="top-right"

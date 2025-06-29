@@ -6,7 +6,8 @@ import StudentManager from '../components/students/StudentManager';
 import RecentSessions from '../components/dashboard/RecentSessions';
 import TutorProfileManager from '../components/profile/TutorProfileManager';
 import SessionScheduler from '../components/scheduling/SessionScheduler';
-import { Home, Users, Video, BarChart3, Settings, Calendar, MessageCircle, User, DollarSign } from 'lucide-react';
+import AdvancedAnalyticsDashboard from '../components/analytics/AdvancedAnalyticsDashboard';
+import { Home, Users, Video, BarChart3, Settings, Calendar, MessageCircle, User } from 'lucide-react';
 
 const TutorDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -17,7 +18,6 @@ const TutorDashboard: React.FC = () => {
     { id: 'sessions', label: 'Sessions', icon: Video, count: 5 },
     { id: 'schedule', label: 'Schedule', icon: Calendar },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-    { id: 'earnings', label: 'Earnings', icon: DollarSign },
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'messages', label: 'Messages', icon: MessageCircle, count: 3 },
     { id: 'settings', label: 'Settings', icon: Settings }
@@ -34,9 +34,7 @@ const TutorDashboard: React.FC = () => {
       case 'schedule':
         return <SessionScheduler />;
       case 'analytics':
-        return <div className="text-center py-12 text-gray-400">Advanced analytics coming soon...</div>;
-      case 'earnings':
-        return <div className="text-center py-12 text-gray-400">Earnings dashboard coming soon...</div>;
+        return <AdvancedAnalyticsDashboard />;
       case 'profile':
         return <TutorProfileManager />;
       case 'messages':
