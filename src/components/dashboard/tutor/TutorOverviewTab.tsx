@@ -1,10 +1,13 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import StatsCards from '../StatsCards';
 import LiveSessionMonitor from '../../session/LiveSessionMonitor';
-import { Calendar, Clock, TrendingUp, Users, DollarSign, Star } from 'lucide-react';
+import { Calendar, Clock, TrendingUp, Users, DollarSign, Star, Plus } from 'lucide-react';
 
 const TutorOverviewTab: React.FC = () => {
+  const navigate = useNavigate();
+
   const todaySchedule = [
     {
       id: 1,
@@ -58,6 +61,12 @@ const TutorOverviewTab: React.FC = () => {
     pending: 450
   };
 
+  const startNewSession = () => {
+    // Create a mock session for demonstration
+    const mockSessionId = 'demo-session-' + Date.now();
+    navigate(`/session/${mockSessionId}`);
+  };
+
   return (
     <div className="space-y-8">
       {/* Welcome Section */}
@@ -66,10 +75,23 @@ const TutorOverviewTab: React.FC = () => {
         animate={{ opacity: 1, y: 0 }}
         className="bg-gradient-to-r from-accent-emerald/10 to-primary-500/10 rounded-2xl p-6 border border-accent-emerald/20"
       >
-        <h2 className="text-2xl font-bold text-white mb-2">Welcome back, Professor Smith!</h2>
-        <p className="text-gray-400">
-          You have 3 sessions scheduled today. Your students are performing excellently!
-        </p>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-white mb-2">Welcome back, Professor Smith!</h2>
+            <p className="text-gray-400">
+              You have 3 sessions scheduled today. Your students are performing excellently!
+            </p>
+          </div>
+          <motion.button
+            onClick={startNewSession}
+            className="bg-gradient-to-r from-primary-500 to-accent-emerald text-white px-6 py-3 rounded-xl font-semibold hover:shadow-lg transition-all duration-200 flex items-center space-x-2 w-full md:w-auto justify-center"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            <Plus className="h-5 w-5" />
+            <span>Start New Session</span>
+          </motion.button>
+        </div>
       </motion.div>
 
       {/* Stats Cards */}
@@ -112,7 +134,7 @@ const TutorOverviewTab: React.FC = () => {
                     <div className="text-gray-400 text-sm">{session.duration}</div>
                   </div>
                 </div>
-                <div className="mt-2">
+                <div className="mt-2 flex items-center justify-between">
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                     session.status === 'confirmed' 
                       ? 'bg-accent-emerald/20 text-accent-emerald' 
@@ -120,6 +142,13 @@ const TutorOverviewTab: React.FC = () => {
                   }`}>
                     {session.status.charAt(0).toUpperCase() + session.status.slice(1)}
                   </span>
+                  <motion.button
+                    onClick={startNewSession}
+                    className="text-primary-500 hover:text-primary-400 text-sm font-medium px-3 py-1 rounded-lg hover:bg-primary-500/10 transition-all duration-200"
+                    whileHover={{ scale: 1.05 }}
+                  >
+                    Start Session
+                  </motion.button>
                 </div>
               </motion.div>
             ))}

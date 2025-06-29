@@ -13,6 +13,11 @@ export class RecordingService {
       this.sessionId = sessionId;
       this.startTime = Date.now();
       
+      // Check for browser support
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        throw new Error('Screen recording is not supported in this browser');
+      }
+
       // Request screen + audio permissions
       const screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: { 
@@ -24,23 +29,30 @@ export class RecordingService {
       });
 
       // Request microphone permission
-      const audioStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 44100
-        }
-      });
+      let audioStream: MediaStream;
+      try {
+        audioStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            sampleRate: 44100
+          }
+        });
+      } catch (audioError) {
+        console.warn('Microphone access denied, continuing with screen audio only');
+        audioStream = new MediaStream();
+      }
 
       // Combine streams
       const combinedStream = new MediaStream([
         ...screenStream.getVideoTracks(),
+        ...screenStream.getAudioTracks(),
         ...audioStream.getAudioTracks()
       ]);
 
       this.stream = combinedStream;
 
-      // Initialize RecordRTC
+      // Initialize RecordRTC with error handling
       this.recorder = new RecordRTC(combinedStream, {
         type: 'video',
         mimeType: 'video/webm;codecs=vp9,opus',
@@ -55,8 +67,10 @@ export class RecordingService {
         },
         timeSlice: 1000,
         ondataavailable: (blob: Blob) => {
-          // Handle real-time data if needed
           console.log('Recording chunk available:', blob.size);
+        },
+        onStateChanged: (state: string) => {
+          console.log('Recording state changed:', state);
         }
       });
 
@@ -71,18 +85,32 @@ export class RecordingService {
         })
         .eq('id', sessionId);
 
-      toast.success('Recording started successfully!');
+      // Handle stream end (user stops sharing)
+      screenStream.getVideoTracks()[0].addEventListener('ended', () => {
+        console.log('Screen sharing ended by user');
+        this.stopRecording();
+      });
+
       return true;
     } catch (error) {
       console.error('Failed to start recording:', error);
-      toast.error('Failed to start recording. Please check permissions.');
+      
+      // Clean up on error
+      if (this.stream) {
+        this.stream.getTracks().forEach(track => track.stop());
+        this.stream = null;
+      }
+      this.recorder = null;
+      this.sessionId = null;
+      this.startTime = 0;
+      
       return false;
     }
   }
 
   async stopRecording(): Promise<string | null> {
     if (!this.recorder || !this.sessionId) {
-      toast.error('No active recording found');
+      console.error('No active recording found');
       return null;
     }
 
@@ -91,6 +119,10 @@ export class RecordingService {
         try {
           const blob = this.recorder!.getBlob();
           const duration = Date.now() - this.startTime;
+          
+          if (blob.size === 0) {
+            throw new Error('Recording is empty');
+          }
           
           // Upload to Supabase Storage
           const fileName = `session-${this.sessionId}-${Date.now()}.webm`;
@@ -141,11 +173,19 @@ export class RecordingService {
           this.sessionId = null;
           this.startTime = 0;
           
-          toast.success('Recording saved successfully!');
           resolve(urlData.publicUrl);
         } catch (error) {
           console.error('Failed to save recording:', error);
-          toast.error('Failed to save recording');
+          
+          // Stop all tracks even on error
+          this.stream?.getTracks().forEach(track => track.stop());
+          
+          // Reset state
+          this.recorder = null;
+          this.stream = null;
+          this.sessionId = null;
+          this.startTime = 0;
+          
           resolve(null);
         }
       });

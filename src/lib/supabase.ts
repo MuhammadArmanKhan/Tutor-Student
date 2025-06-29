@@ -3,7 +3,13 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://your-project.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'your-anon-key';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false
+  }
+});
 
 // Database Types - Updated to match actual schema
 export interface User {
@@ -161,73 +167,88 @@ export interface ProgressTracking {
 export const dbHelpers = {
   // Get user with profile data
   async getUserWithProfile(userId: string) {
-    const { data: user, error: userError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', userId)
-      .single();
-
-    if (userError || !user) return null;
-
-    let profileData = null;
-    if (user.role === 'tutor') {
-      const { data } = await supabase
-        .from('tutor_profiles')
+    try {
+      const { data: user, error: userError } = await supabase
+        .from('users')
         .select('*')
-        .eq('user_id', userId)
+        .eq('id', userId)
         .single();
-      profileData = data;
-    } else if (user.role === 'student') {
-      const { data } = await supabase
-        .from('student_profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-      profileData = data;
+
+      if (userError || !user) return null;
+
+      let profileData = null;
+      if (user.role === 'tutor') {
+        const { data } = await supabase
+          .from('tutor_profiles')
+          .select('*')
+          .eq('user_id', userId)
+          .single();
+        profileData = data;
+      } else if (user.role === 'student') {
+        const { data } = await supabase
+          .from('student_profiles')
+          .select('*')
+          .eq('user_id', userId)
+          .single();
+        profileData = data;
+      }
+
+      return { user, profile: profileData };
+    } catch (error) {
+      console.error('Error getting user with profile:', error);
+      return null;
     }
-
-    return { user, profile: profileData };
   },
 
   // Get sessions with related data
   async getSessionsWithDetails(userId: string, role: string) {
-    const query = supabase
-      .from('sessions')
-      .select(`
-        *,
-        tutor:users!sessions_tutor_id_fkey(id, name, email),
-        student:users!sessions_student_id_fkey(id, name, email),
-        recording:session_recordings(*)
-      `)
-      .order('scheduled_at', { ascending: false });
+    try {
+      const query = supabase
+        .from('sessions')
+        .select(`
+          *,
+          tutor:users!sessions_tutor_id_fkey(id, name, email),
+          student:users!sessions_student_id_fkey(id, name, email),
+          recording:session_recordings(*)
+        `)
+        .order('scheduled_at', { ascending: false });
 
-    if (role === 'tutor') {
-      query.eq('tutor_id', userId);
-    } else {
-      query.eq('student_id', userId);
+      if (role === 'tutor') {
+        query.eq('tutor_id', userId);
+      } else {
+        query.eq('student_id', userId);
+      }
+
+      return await query;
+    } catch (error) {
+      console.error('Error getting sessions with details:', error);
+      return { data: null, error };
     }
-
-    return await query;
   },
 
   // Get progress data for student
   async getStudentProgress(studentId: string) {
-    const [milestones, progress] = await Promise.all([
-      supabase
-        .from('learning_milestones')
-        .select('*')
-        .eq('student_id', studentId)
-        .order('target_date', { ascending: true }),
-      
-      supabase
-        .from('progress_tracking')
-        .select('*')
-        .eq('student_id', studentId)
-    ]);
+    try {
+      const [milestones, progress] = await Promise.all([
+        supabase
+          .from('learning_milestones')
+          .select('*')
+          .eq('student_id', studentId)
+          .order('target_date', { ascending: true }),
+        
+        supabase
+          .from('progress_tracking')
+          .select('*')
+          .eq('student_id', studentId)
+      ]);
 
-    return {
-      milestones: milestones.data || [],
-      progress: progress.data || []
-    };
+      return {
+        milestones: milestones.data || [],
+        progress: progress.data || []
+      };
+    } catch (error) {
+      console.error('Error getting student progress:', error);
+      return { milestones: [], progress: [] };
+    }
   }
 };

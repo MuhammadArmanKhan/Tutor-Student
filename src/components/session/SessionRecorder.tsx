@@ -36,12 +36,20 @@ const SessionRecorder: React.FC<SessionRecorderProps> = ({ sessionId, onRecordin
 
   const startRecording = async () => {
     try {
+      // Check for required permissions first
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        toast.error('Screen recording is not supported in this browser');
+        return;
+      }
+
       const success = await recordingService.startRecording(sessionId);
       if (success) {
         setIsRecording(true);
         setIsPaused(false);
         setRecordingTime(0);
         toast.success('Recording started successfully!');
+      } else {
+        toast.error('Failed to start recording. Please check your permissions.');
       }
     } catch (error) {
       console.error('Failed to start recording:', error);
@@ -50,15 +58,25 @@ const SessionRecorder: React.FC<SessionRecorderProps> = ({ sessionId, onRecordin
   };
 
   const pauseRecording = () => {
-    recordingService.pauseRecording();
-    setIsPaused(true);
-    toast.success('Recording paused');
+    try {
+      recordingService.pauseRecording();
+      setIsPaused(true);
+      toast.success('Recording paused');
+    } catch (error) {
+      console.error('Failed to pause recording:', error);
+      toast.error('Failed to pause recording');
+    }
   };
 
   const resumeRecording = () => {
-    recordingService.resumeRecording();
-    setIsPaused(false);
-    toast.success('Recording resumed');
+    try {
+      recordingService.resumeRecording();
+      setIsPaused(false);
+      toast.success('Recording resumed');
+    } catch (error) {
+      console.error('Failed to resume recording:', error);
+      toast.error('Failed to resume recording');
+    }
   };
 
   const stopRecording = async () => {
@@ -107,6 +125,8 @@ const SessionRecorder: React.FC<SessionRecorderProps> = ({ sessionId, onRecordin
           toast.success('Session completed! Recording saved. Processing will continue in background.');
           onRecordingComplete?.(recordingUrl);
         }
+      } else {
+        toast.error('Failed to save recording');
       }
     } catch (error) {
       console.error('Recording processing error:', error);

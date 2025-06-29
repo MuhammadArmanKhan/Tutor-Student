@@ -81,6 +81,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password: string, role: string) => {
     try {
+      // First check if user exists in our custom table
+      const { data: existingUser, error: userCheckError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .single();
+
+      if (userCheckError && userCheckError.code !== 'PGRST116') {
+        throw new Error('Database error occurred. Please try again.');
+      }
+
+      if (!existingUser) {
+        throw new Error('No account found with this email. Please sign up first.');
+      }
+
       // Use Supabase authentication
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
@@ -88,26 +103,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (authError) {
-        // Handle specific authentication errors
         if (authError.message.includes('Invalid login credentials')) {
           throw new Error('Invalid email or password. Please check your credentials and try again.');
         }
-        // For any other authentication errors, throw the original error
         throw authError;
       }
 
       if (authData.user) {
-        // Get user profile from our custom table
-        const { data: existingUser, error } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', authData.user.id)
-          .single();
-
-        if (error || !existingUser) {
-          throw new Error('User profile not found. Please contact support.');
-        }
-
         const userData: User = {
           id: existingUser.id,
           email: existingUser.email,
@@ -128,19 +130,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error) {
       console.error('Sign in error:', error);
-      // Re-throw the error with the specific message
       throw new Error(error instanceof Error ? error.message : 'Failed to sign in. Please try again.');
     }
   };
 
   const signUp = async (userData: any) => {
     try {
+      // Check if user already exists in our custom table
+      const { data: existingUser, error: userCheckError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', userData.email)
+        .single();
+
+      if (existingUser) {
+        throw new Error('An account with this email already exists. Please sign in instead.');
+      }
+
       // Use Supabase authentication
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: userData.email,
-        password: userData.password || 'defaultpassword123', // Use provided password or default
+        password: userData.password || 'defaultpassword123',
         options: {
-          emailRedirectTo: undefined // Disable email confirmation for demo
+          emailRedirectTo: undefined
         }
       });
 
@@ -163,43 +175,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           updated_at: new Date().toISOString()
         };
         
-        // Save to database
+        // Save to database with proper error handling
         const { error: userError } = await supabase
           .from('users')
           .insert(mockUser);
 
-        if (userError) throw userError;
+        if (userError) {
+          // If user creation fails, clean up auth user
+          await supabase.auth.signOut();
+          throw new Error('Failed to create user profile. Please try again.');
+        }
 
         // Create role-specific profile
-        if (userData.role === 'tutor') {
-          const { error: profileError } = await supabase
-            .from('tutor_profiles')
-            .insert({
-              user_id: authData.user.id,
-              bio: '',
-              hourly_rate: 0,
-              experience_years: 0,
-              certifications: [],
-              subjects: [],
-              rating: 0,
-              total_sessions: 0,
-              created_at: new Date().toISOString()
-            });
+        try {
+          if (userData.role === 'tutor') {
+            const { error: profileError } = await supabase
+              .from('tutor_profiles')
+              .insert({
+                user_id: authData.user.id,
+                bio: '',
+                hourly_rate: 0,
+                experience_years: 0,
+                certifications: [],
+                subjects: [],
+                rating: 0,
+                total_sessions: 0,
+                created_at: new Date().toISOString()
+              });
 
-          if (profileError) throw profileError;
-        } else if (userData.role === 'student') {
-          const { error: profileError } = await supabase
-            .from('student_profiles')
-            .insert({
-              user_id: authData.user.id,
-              parent_id: userData.role === 'parent' ? authData.user.id : null,
-              grade_level: '',
-              subjects_of_interest: [],
-              learning_goals: [],
-              created_at: new Date().toISOString()
-            });
+            if (profileError) throw profileError;
+          } else if (userData.role === 'student' || userData.role === 'parent') {
+            const { error: profileError } = await supabase
+              .from('student_profiles')
+              .insert({
+                user_id: authData.user.id,
+                parent_id: userData.role === 'parent' ? authData.user.id : null,
+                grade_level: '',
+                subjects_of_interest: [],
+                learning_goals: [],
+                created_at: new Date().toISOString()
+              });
 
-          if (profileError) throw profileError;
+            if (profileError) throw profileError;
+          }
+        } catch (profileError) {
+          console.warn('Profile creation warning:', profileError);
+          // Don't fail the whole signup for profile creation issues
         }
 
         // Send welcome email
@@ -207,7 +228,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await emailService.sendWelcomeEmail(mockUser.email, mockUser.name, mockUser.role);
         } catch (emailError) {
           console.warn('Failed to send welcome email:', emailError);
-          // Don't throw error for email failure
         }
         
         const finalUser: User = {

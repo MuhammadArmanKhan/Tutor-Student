@@ -1,11 +1,14 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import StatsCards from '../StatsCards';
 import EngagementChart from '../EngagementChart';
 import TutorPerformance from '../TutorPerformance';
-import { Calendar, Clock, TrendingUp, Award } from 'lucide-react';
+import { Calendar, Clock, TrendingUp, Award, Video } from 'lucide-react';
 
 const OverviewTab: React.FC = () => {
+  const navigate = useNavigate();
+
   const upcomingSessions = [
     {
       id: 1,
@@ -46,6 +49,12 @@ const OverviewTab: React.FC = () => {
     }
   ];
 
+  const joinDemoSession = () => {
+    // Create a mock session for demonstration
+    const mockSessionId = 'demo-session-' + Date.now();
+    navigate(`/session/${mockSessionId}`);
+  };
+
   return (
     <div className="space-y-8">
       {/* Welcome Section */}
@@ -54,10 +63,23 @@ const OverviewTab: React.FC = () => {
         animate={{ opacity: 1, y: 0 }}
         className="bg-gradient-to-r from-primary-500/10 to-accent-emerald/10 rounded-2xl p-6 border border-primary-500/20"
       >
-        <h2 className="text-2xl font-bold text-white mb-2">Welcome back, Alex!</h2>
-        <p className="text-gray-400">
-          You have 2 upcoming sessions today. Keep up the great work!
-        </p>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-white mb-2">Welcome back, Alex!</h2>
+            <p className="text-gray-400">
+              You have 2 upcoming sessions today. Keep up the great work!
+            </p>
+          </div>
+          <motion.button
+            onClick={joinDemoSession}
+            className="bg-gradient-to-r from-primary-500 to-accent-emerald text-white px-6 py-3 rounded-xl font-semibold hover:shadow-lg transition-all duration-200 flex items-center space-x-2 w-full md:w-auto justify-center"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            <Video className="h-5 w-5" />
+            <span>Join Demo Session</span>
+          </motion.button>
+        </div>
       </motion.div>
 
       {/* Stats Cards */}
@@ -96,6 +118,18 @@ const OverviewTab: React.FC = () => {
                       {session.time} • {session.duration}
                     </div>
                   </div>
+                </div>
+                <div className="mt-3 flex items-center justify-between">
+                  <span className="text-xs text-gray-500 bg-white/5 px-2 py-1 rounded">
+                    {session.subject}
+                  </span>
+                  <motion.button
+                    onClick={joinDemoSession}
+                    className="text-primary-500 hover:text-primary-400 text-sm font-medium px-3 py-1 rounded-lg hover:bg-primary-500/10 transition-all duration-200"
+                    whileHover={{ scale: 1.05 }}
+                  >
+                    Join Session
+                  </motion.button>
                 </div>
               </motion.div>
             ))}
@@ -138,6 +172,16 @@ const OverviewTab: React.FC = () => {
               </motion.div>
             ))}
           </div>
+          
+          {/* Demo Session Button */}
+          <motion.button
+            onClick={joinDemoSession}
+            className="w-full mt-6 bg-gradient-to-r from-accent-emerald/20 to-primary-500/20 text-white py-3 px-4 rounded-xl hover:from-accent-emerald/30 hover:to-primary-500/30 transition-all duration-200 font-medium border border-accent-emerald/30"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            🎯 Try Demo Session Recording
+          </motion.button>
         </motion.div>
       </div>
 
