@@ -88,83 +88,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (authError) {
-        // If user doesn't exist, create them for demo purposes
+        // Handle specific authentication errors
         if (authError.message.includes('Invalid login credentials')) {
-          // Create user with Supabase auth first
-          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-              emailRedirectTo: undefined // Disable email confirmation for demo
-            }
-          });
-
-          if (signUpError) throw signUpError;
-
-          if (signUpData.user) {
-            // Create user profile in our custom table
-            const mockUser = {
-              id: signUpData.user.id,
-              email,
-              name: email.split('@')[0],
-              role: role as 'student' | 'tutor' | 'parent',
-              profile_complete: false,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-              last_login: new Date().toISOString()
-            };
-
-            const { error: insertError } = await supabase
-              .from('users')
-              .insert(mockUser);
-
-            if (insertError) throw insertError;
-
-            // Create role-specific profile
-            if (role === 'tutor') {
-              const { error: profileError } = await supabase
-                .from('tutor_profiles')
-                .insert({
-                  user_id: signUpData.user.id,
-                  bio: '',
-                  hourly_rate: 0,
-                  experience_years: 0,
-                  certifications: [],
-                  subjects: [],
-                  rating: 0,
-                  total_sessions: 0,
-                  created_at: new Date().toISOString()
-                });
-
-              if (profileError) throw profileError;
-            } else if (role === 'student') {
-              const { error: profileError } = await supabase
-                .from('student_profiles')
-                .insert({
-                  user_id: signUpData.user.id,
-                  parent_id: null,
-                  grade_level: '',
-                  subjects_of_interest: [],
-                  learning_goals: [],
-                  created_at: new Date().toISOString()
-                });
-
-              if (profileError) throw profileError;
-            }
-
-            const userData: User = {
-              id: mockUser.id,
-              email: mockUser.email,
-              name: mockUser.name,
-              role: mockUser.role,
-              profileComplete: mockUser.profile_complete
-            };
-
-            setUser(userData);
-            localStorage.setItem('edusync_user', JSON.stringify(userData));
-            return;
-          }
+          throw new Error('Invalid email or password. Please check your credentials and try again.');
         }
+        // For any other authentication errors, throw the original error
         throw authError;
       }
 
@@ -177,7 +105,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .single();
 
         if (error || !existingUser) {
-          throw new Error('User profile not found');
+          throw new Error('User profile not found. Please contact support.');
         }
 
         const userData: User = {
@@ -200,7 +128,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error) {
       console.error('Sign in error:', error);
-      throw new Error('Failed to sign in. Please check your credentials.');
+      // Re-throw the error with the specific message
+      throw new Error(error instanceof Error ? error.message : 'Failed to sign in. Please try again.');
     }
   };
 
@@ -216,7 +145,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (authError) {
-        if (authError.message.includes('already registered')) {
+        if (authError.message.includes('already registered') || authError.message.includes('user_already_exists')) {
           throw new Error('An account with this email already exists. Please sign in instead.');
         }
         throw authError;

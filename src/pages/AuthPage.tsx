@@ -35,7 +35,9 @@ const AuthPage: React.FC = () => {
         navigate(formData.role === 'tutor' ? '/tutor-dashboard' : '/student-dashboard');
       }
     } catch (error) {
-      toast.error('Authentication failed. Please try again.');
+      // Display the specific error message from the auth functions
+      const errorMessage = error instanceof Error ? error.message : 'Authentication failed. Please try again.';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
