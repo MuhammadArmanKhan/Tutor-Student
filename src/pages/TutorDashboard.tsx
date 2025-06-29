@@ -1,0 +1,65 @@
+import React, { useState } from 'react';
+import DashboardLayout from '../components/dashboard/DashboardLayout';
+import TabNavigation from '../components/dashboard/TabNavigation';
+import TutorOverviewTab from '../components/dashboard/tutor/TutorOverviewTab';
+import StudentManager from '../components/students/StudentManager';
+import RecentSessions from '../components/dashboard/RecentSessions';
+import TutorProfileManager from '../components/profile/TutorProfileManager';
+import SessionScheduler from '../components/scheduling/SessionScheduler';
+import { Home, Users, Video, BarChart3, Settings, Calendar, MessageCircle, User, DollarSign } from 'lucide-react';
+
+const TutorDashboard: React.FC = () => {
+  const [activeTab, setActiveTab] = useState('overview');
+
+  const tabs = [
+    { id: 'overview', label: 'Overview', icon: Home },
+    { id: 'students', label: 'Students', icon: Users, count: 28 },
+    { id: 'sessions', label: 'Sessions', icon: Video, count: 5 },
+    { id: 'schedule', label: 'Schedule', icon: Calendar },
+    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'earnings', label: 'Earnings', icon: DollarSign },
+    { id: 'profile', label: 'Profile', icon: User },
+    { id: 'messages', label: 'Messages', icon: MessageCircle, count: 3 },
+    { id: 'settings', label: 'Settings', icon: Settings }
+  ];
+
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'overview':
+        return <TutorOverviewTab />;
+      case 'students':
+        return <StudentManager />;
+      case 'sessions':
+        return <RecentSessions />;
+      case 'schedule':
+        return <SessionScheduler />;
+      case 'analytics':
+        return <div className="text-center py-12 text-gray-400">Advanced analytics coming soon...</div>;
+      case 'earnings':
+        return <div className="text-center py-12 text-gray-400">Earnings dashboard coming soon...</div>;
+      case 'profile':
+        return <TutorProfileManager />;
+      case 'messages':
+        return <div className="text-center py-12 text-gray-400">Messaging system coming soon...</div>;
+      case 'settings':
+        return <div className="text-center py-12 text-gray-400">Settings panel coming soon...</div>;
+      default:
+        return <TutorOverviewTab />;
+    }
+  };
+
+  return (
+    <DashboardLayout title="Tutor Dashboard" role="tutor">
+      <div className="space-y-6">
+        <TabNavigation 
+          tabs={tabs} 
+          activeTab={activeTab} 
+          onTabChange={setActiveTab} 
+        />
+        {renderTabContent()}
+      </div>
+    </DashboardLayout>
+  );
+};
+
+export default TutorDashboard;
