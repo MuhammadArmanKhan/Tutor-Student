@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase, dbHelpers } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import { EmailService } from '../services/emailService';
 
 interface User {
