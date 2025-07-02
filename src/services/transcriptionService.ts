@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 
-const ASSEMBLYAI_API_KEY = import.meta.env.VITE_ASSEMBLYAI_API_KEY;
+const ASSEMBLYAI_API_KEY = '26ae3d9e3a8f4077833c7f0379f9a479';
 console.log('[AssemblyAI] Loaded API Key:', ASSEMBLYAI_API_KEY);
 const ASSEMBLYAI_BASE_URL = 'https://api.assemblyai.com/v2';
 
