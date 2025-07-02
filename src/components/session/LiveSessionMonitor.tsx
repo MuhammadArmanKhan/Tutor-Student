@@ -72,18 +72,27 @@ const LiveSessionMonitor: React.FC = () => {
       if (error) throw error;
 
       // Transform data and simulate real-time metrics
-      const transformedSessions: LiveSession[] = data.map(session => ({
-        id: session.id,
-        title: session.title,
-        subject: session.subject,
-        student_name: session.student.name,
-        started_at: session.started_at,
-        duration_minutes: session.duration_minutes,
-        current_engagement: Math.floor(Math.random() * 30) + 70, // Simulate real-time engagement
-        is_student_speaking: Math.random() > 0.7,
-        is_tutor_speaking: Math.random() > 0.8,
-        participants_count: 2
-      }));
+      const transformedSessions: LiveSession[] = data.map(session => {
+        let studentName = 'Unknown Student';
+        if (Array.isArray(session.student)) {
+          const arr = session.student as any[];
+          studentName = arr[0]?.name || 'Unknown Student';
+        } else if (session.student && (session.student as any).name) {
+          studentName = (session.student as any).name;
+        }
+        return {
+          id: session.id,
+          title: session.title,
+          subject: session.subject,
+          student_name: studentName,
+          started_at: session.started_at,
+          duration_minutes: session.duration_minutes,
+          current_engagement: Math.floor(Math.random() * 30) + 70, // Simulate real-time engagement
+          is_student_speaking: Math.random() > 0.7,
+          is_tutor_speaking: Math.random() > 0.8,
+          participants_count: 2
+        };
+      });
 
       setLiveSessions(transformedSessions);
     } catch (error) {

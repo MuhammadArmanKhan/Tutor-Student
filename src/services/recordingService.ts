@@ -12,59 +12,25 @@ export class RecordingService {
     try {
       this.sessionId = sessionId;
       this.startTime = Date.now();
-      
-      // Check for browser support
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-        throw new Error('Screen recording is not supported in this browser');
-      }
 
-      // Request screen + audio permissions
-      const screenStream = await navigator.mediaDevices.getDisplayMedia({
-        video: { 
-          mediaSource: 'screen',
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
-        },
-        audio: true
+      // Request microphone permission ONLY
+      const audioStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 44100
+        }
       });
 
-      // Request microphone permission
-      let audioStream: MediaStream;
-      try {
-        audioStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            sampleRate: 44100
-          }
-        });
-      } catch (audioError) {
-        console.warn('Microphone access denied, continuing with screen audio only');
-        audioStream = new MediaStream();
-      }
+      // Use only the audio stream for recording
+      this.stream = audioStream;
 
-      // Combine streams
-      const combinedStream = new MediaStream([
-        ...screenStream.getVideoTracks(),
-        ...screenStream.getAudioTracks(),
-        ...audioStream.getAudioTracks()
-      ]);
-
-      this.stream = combinedStream;
-
-      // Initialize RecordRTC with error handling
-      this.recorder = new RecordRTC(combinedStream, {
-        type: 'video',
-        mimeType: 'video/webm;codecs=vp9,opus',
-        recorderType: RecordRTC.MediaStreamRecorder,
-        video: {
-          width: 1920,
-          height: 1080
-        },
-        audio: {
-          sampleRate: 44100,
-          channelCount: 2
-        },
+      this.recorder = new RecordRTC(audioStream, {
+        type: 'audio',
+        mimeType: 'audio/wav',
+        recorderType: RecordRTC.StereoAudioRecorder,
+        sampleRate: 44100,
+        numberOfAudioChannels: 1,
         timeSlice: 1000,
         ondataavailable: (blob: Blob) => {
           console.log('Recording chunk available:', blob.size);
@@ -75,27 +41,9 @@ export class RecordingService {
       });
 
       this.recorder.startRecording();
-      
-      // Update session status
-      await supabase
-        .from('sessions')
-        .update({ 
-          status: 'in_progress',
-          started_at: new Date().toISOString()
-        })
-        .eq('id', sessionId);
-
-      // Handle stream end (user stops sharing)
-      screenStream.getVideoTracks()[0].addEventListener('ended', () => {
-        console.log('Screen sharing ended by user');
-        this.stopRecording();
-      });
-
       return true;
     } catch (error) {
       console.error('Failed to start recording:', error);
-      
-      // Clean up on error
       if (this.stream) {
         this.stream.getTracks().forEach(track => track.stop());
         this.stream = null;
@@ -103,7 +51,6 @@ export class RecordingService {
       this.recorder = null;
       this.sessionId = null;
       this.startTime = 0;
-      
       return false;
     }
   }
@@ -119,73 +66,79 @@ export class RecordingService {
         try {
           const blob = this.recorder!.getBlob();
           const duration = Date.now() - this.startTime;
-          
           if (blob.size === 0) {
             throw new Error('Recording is empty');
           }
-          
-          // Upload to Supabase Storage
-          const fileName = `session-${this.sessionId}-${Date.now()}.webm`;
+          // Upload to Supabase Storage as .wav
+          const fileName = `session-${this.sessionId}-${Date.now()}.wav`;
           const { data, error } = await supabase.storage
             .from('session-recordings')
             .upload(fileName, blob, {
-              contentType: 'video/webm',
+              contentType: 'audio/wav',
               upsert: false
             });
-
           if (error) throw error;
-
           // Get public URL
           const { data: urlData } = supabase.storage
             .from('session-recordings')
             .getPublicUrl(fileName);
 
-          // Save recording metadata
-          const { error: dbError } = await supabase
+          // Check if a recording already exists for this session
+          const { data: existing } = await supabase
             .from('session_recordings')
-            .insert({
-              session_id: this.sessionId,
-              video_url: urlData.publicUrl,
-              file_size: blob.size,
-              duration_seconds: Math.floor(duration / 1000),
-              processing_status: 'pending',
-              created_at: new Date().toISOString()
-            });
+            .select('id')
+            .eq('session_id', this.sessionId)
+            .single();
 
+          let dbError;
+          if (!existing) {
+            // Insert new recording
+            ({ error: dbError } = await supabase
+              .from('session_recordings')
+              .insert({
+                session_id: this.sessionId,
+                audio_url: urlData.publicUrl,
+                file_size: blob.size,
+                duration_seconds: Math.floor(duration / 1000),
+                processing_status: 'pending',
+                created_at: new Date().toISOString()
+              }));
+          } else {
+            // Update existing recording
+            ({ error: dbError } = await supabase
+              .from('session_recordings')
+              .update({
+                audio_url: urlData.publicUrl,
+                file_size: blob.size,
+                duration_seconds: Math.floor(duration / 1000),
+                processing_status: 'pending',
+                created_at: new Date().toISOString()
+              })
+              .eq('id', existing.id));
+          }
           if (dbError) throw dbError;
-
-          // Update session status
-          await supabase
-            .from('sessions')
-            .update({ 
-              status: 'completed',
-              recording_url: urlData.publicUrl,
-              completed_at: new Date().toISOString()
-            })
-            .eq('id', this.sessionId);
 
           // Stop all tracks
           this.stream?.getTracks().forEach(track => track.stop());
-          
           // Reset state
           this.recorder = null;
           this.stream = null;
           this.sessionId = null;
           this.startTime = 0;
-          
           resolve(urlData.publicUrl);
         } catch (error) {
           console.error('Failed to save recording:', error);
-          
+          toast.error(
+            error?.message ||
+            (typeof error === 'object' ? JSON.stringify(error) : String(error))
+          );
           // Stop all tracks even on error
           this.stream?.getTracks().forEach(track => track.stop());
-          
           // Reset state
           this.recorder = null;
           this.stream = null;
           this.sessionId = null;
           this.startTime = 0;
-          
           resolve(null);
         }
       });

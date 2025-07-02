@@ -44,8 +44,9 @@ const SessionPage: React.FC = () => {
         .from('sessions')
         .select(`
           *,
-          tutor:users!sessions_tutor_id_fkey(name),
-          student:users!sessions_student_id_fkey(name)
+          tutor:users!sessions_tutor_id_fkey(id, name, email),
+          student:users!sessions_student_id_fkey(id, name, email),
+          recording:session_recordings(*)
         `)
         .eq('id', sessionId)
         .single();

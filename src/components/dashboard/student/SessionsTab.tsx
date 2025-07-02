@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Video, Download, FileText, Clock, User, Play, Calendar, Filter } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../../lib/supabase';
+import toast from 'react-hot-toast';
 
 const SessionsTab: React.FC = () => {
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const navigate = useNavigate();
 
   const sessions = [
     {
@@ -74,6 +78,38 @@ const SessionsTab: React.FC = () => {
       case 'scheduled': return 'bg-accent-amber/10';
       case 'cancelled': return 'bg-red-400/10';
       default: return 'bg-gray-400/10';
+    }
+  };
+
+  // Helper to create a session in Supabase
+  const createSessionFromSchedule = async (scheduledSession: any) => {
+    const { data, error } = await supabase
+      .from('sessions')
+      .insert([
+        {
+          tutor_id: scheduledSession.tutor_id || 'mock-tutor-id',
+          student_id: scheduledSession.student_id || 'mock-student-id',
+          title: scheduledSession.title,
+          subject: scheduledSession.subject,
+          scheduled_at: new Date().toISOString(),
+          duration_minutes: scheduledSession.duration || 60,
+          status: 'in_progress',
+          notes: '',
+        },
+      ])
+      .select('id')
+      .single();
+    if (error) throw error;
+    return data.id;
+  };
+
+  // Handler for joining a session
+  const joinSession = async (scheduledSession: any) => {
+    try {
+      const sessionId = await createSessionFromSchedule(scheduledSession);
+      navigate(`/session/${sessionId}`);
+    } catch (error) {
+      toast.error('Failed to join session');
     }
   };
 
@@ -206,6 +242,7 @@ const SessionsTab: React.FC = () => {
                   )}
                   {session.status === 'scheduled' && (
                     <motion.button
+                      onClick={() => joinSession(session)}
                       className="px-4 py-2 bg-accent-emerald text-white rounded-lg hover:bg-accent-emerald/80 transition-colors duration-200 text-sm font-medium"
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}

@@ -4,9 +4,13 @@ import { useNavigate } from 'react-router-dom';
 import StatsCards from '../StatsCards';
 import LiveSessionMonitor from '../../session/LiveSessionMonitor';
 import { Calendar, Clock, TrendingUp, Users, DollarSign, Star, Plus } from 'lucide-react';
+import { supabase } from '../../../lib/supabase';
+import toast from 'react-hot-toast';
+import { useAuth } from '../../../contexts/AuthContext';
 
 const TutorOverviewTab: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const todaySchedule = [
     {
@@ -61,10 +65,42 @@ const TutorOverviewTab: React.FC = () => {
     pending: 450
   };
 
-  const startNewSession = () => {
-    // Create a mock session for demonstration
-    const mockSessionId = 'demo-session-' + Date.now();
-    navigate(`/session/${mockSessionId}`);
+  // Helper to create a session in Supabase
+  const createSessionFromSchedule = async (scheduledSession: any) => {
+    const { data, error } = await supabase
+      .from('sessions')
+      .insert([
+        {
+          tutor_id: user?.id,
+          student_id: '550e8400-e29b-41d4-a716-446655440002',
+          title: scheduledSession.subject + ' Session',
+          subject: scheduledSession.subject,
+          scheduled_at: new Date().toISOString(),
+          duration_minutes: parseInt(scheduledSession.duration) || 60,
+          status: 'in_progress',
+          notes: '',
+        },
+      ])
+      .select('id')
+      .single();
+    if (error) throw error;
+    return data.id;
+  };
+
+  // Updated startNewSession to create a real session
+  const startNewSession = async (scheduledSession?: any) => {
+    try {
+      // Use the first confirmed session as a demo; in real app, pass the session object
+      const sessionToStart = scheduledSession || todaySchedule.find(s => s.status === 'confirmed');
+      if (!sessionToStart) {
+        toast.error('No confirmed session to start.');
+        return;
+      }
+      const sessionId = await createSessionFromSchedule(sessionToStart);
+      navigate(`/session/${sessionId}`);
+    } catch (error) {
+      toast.error('Failed to start session');
+    }
   };
 
   return (
@@ -83,7 +119,7 @@ const TutorOverviewTab: React.FC = () => {
             </p>
           </div>
           <motion.button
-            onClick={startNewSession}
+            onClick={() => startNewSession()}
             className="bg-gradient-to-r from-primary-500 to-accent-emerald text-white px-6 py-3 rounded-xl font-semibold hover:shadow-lg transition-all duration-200 flex items-center space-x-2 w-full md:w-auto justify-center"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -143,7 +179,7 @@ const TutorOverviewTab: React.FC = () => {
                     {session.status.charAt(0).toUpperCase() + session.status.slice(1)}
                   </span>
                   <motion.button
-                    onClick={startNewSession}
+                    onClick={() => startNewSession(session)}
                     className="text-primary-500 hover:text-primary-400 text-sm font-medium px-3 py-1 rounded-lg hover:bg-primary-500/10 transition-all duration-200"
                     whileHover={{ scale: 1.05 }}
                   >

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import DashboardLayout from '../components/dashboard/DashboardLayout';
 import TabNavigation from '../components/dashboard/TabNavigation';
 import TutorOverviewTab from '../components/dashboard/tutor/TutorOverviewTab';
@@ -8,9 +8,23 @@ import TutorProfileManager from '../components/profile/TutorProfileManager';
 import SessionScheduler from '../components/scheduling/SessionScheduler';
 import AdvancedAnalyticsDashboard from '../components/analytics/AdvancedAnalyticsDashboard';
 import { Home, Users, Video, BarChart3, Settings, Calendar, MessageCircle, User } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const TutorDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState('overview');
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loading) {
+      if (!user) {
+        navigate('/auth');
+      } else if (user.role !== 'tutor') {
+        navigate(user.role === 'student' ? '/student-dashboard' : '/auth');
+      }
+    }
+  }, [user, loading, navigate]);
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: Home },

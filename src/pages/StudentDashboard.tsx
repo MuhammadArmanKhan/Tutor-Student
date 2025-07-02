@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import DashboardLayout from '../components/dashboard/DashboardLayout';
 import TabNavigation from '../components/dashboard/TabNavigation';
 import OverviewTab from '../components/dashboard/student/OverviewTab';
@@ -7,9 +7,23 @@ import TutorsTab from '../components/dashboard/student/TutorsTab';
 import AnalyticsTab from '../components/dashboard/student/AnalyticsTab';
 import StudentProgressDashboard from '../components/analytics/StudentProgressDashboard';
 import { Home, Video, Users, BarChart3, Settings, Calendar, MessageCircle, TrendingUp } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const StudentDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState('overview');
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loading) {
+      if (!user) {
+        navigate('/auth');
+      } else if (user.role !== 'student') {
+        navigate(user.role === 'tutor' ? '/tutor-dashboard' : '/auth');
+      }
+    }
+  }, [user, loading, navigate]);
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: Home },

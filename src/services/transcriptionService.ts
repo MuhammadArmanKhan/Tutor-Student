@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 
 const ASSEMBLYAI_API_KEY = import.meta.env.VITE_ASSEMBLYAI_API_KEY;
+console.log('[AssemblyAI] Loaded API Key:', ASSEMBLYAI_API_KEY);
 const ASSEMBLYAI_BASE_URL = 'https://api.assemblyai.com/v2';
 
 export interface TranscriptionResult {
@@ -58,7 +59,9 @@ export class TranscriptionService {
     return data.upload_url;
   }
 
-  async transcribeSession(sessionId: string, audioUrl: string): Promise<TranscriptionResult | null> {
+  async transcribeSession(sessionId: string, recordingUrl: string): Promise<TranscriptionResult | null> {
+    console.log('[AssemblyAI] Using API Key:', ASSEMBLYAI_API_KEY);
+    console.log('[AssemblyAI] Recording URL:', recordingUrl);
     try {
       if (!ASSEMBLYAI_API_KEY) {
         console.warn('AssemblyAI API key not configured, using mock transcription');
@@ -66,7 +69,7 @@ export class TranscriptionService {
       }
 
       // Upload audio file
-      const uploadUrl = await this.uploadAudio(audioUrl);
+      const uploadUrl = await this.uploadAudio(recordingUrl);
 
       // Start transcription with speaker diarization and sentiment analysis
       const transcriptResponse = await fetch(`${ASSEMBLYAI_BASE_URL}/transcript`, {

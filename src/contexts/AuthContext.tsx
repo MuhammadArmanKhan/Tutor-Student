@@ -159,54 +159,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password: string, role: string) => {
     try {
-      console.log('Attempting sign in for:', email, role);
+      // Try to sign in with Supabase Auth
+      let { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
 
-      // First check if user exists in our database
-      const { data: existingUser, error: userError } = await supabase
+      // If user doesn't exist, sign them up
+      if (authError && authError.message.includes('Invalid login credentials')) {
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: undefined }
+        });
+        if (signUpError) throw signUpError;
+        authData = signUpData;
+      } else if (authError) {
+        throw authError;
+      }
+
+      // Now ensure user exists in your users table
+      let { data: existingUser, error: userError } = await supabase
         .from('users')
         .select('*')
         .eq('email', email)
         .single();
 
-      if (userError || !existingUser) {
-        throw new Error('User not found. Please check your email or sign up first.');
+      if (!existingUser && authData && authData.user) {
+        // Create user record
+        const newUser = {
+          id: authData.user.id,
+          email,
+          name: email.split('@')[0],
+          role,
+          profile_complete: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        const { error: insertError } = await supabase.from('users').insert(newUser);
+        if (insertError) throw insertError;
+        existingUser = newUser;
       }
 
-      if (existingUser.role !== role) {
-        throw new Error(`This account is registered as a ${existingUser.role}, not a ${role}.`);
-      }
-
-      // Use Supabase authentication
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-
-      if (authError) {
-        if (authError.message.includes('Invalid login credentials')) {
-          throw new Error('Invalid email or password. Please check your credentials and try again.');
-        }
-        throw authError;
-      }
-
-      if (authData.user) {
-        // Update last login
-        await supabase
-          .from('users')
-          .update({ last_login: new Date().toISOString() })
-          .eq('id', existingUser.id);
-
-        const userData: User = {
+      // Set user in state
+      if (existingUser) {
+        setUser({
           id: existingUser.id,
           email: existingUser.email,
           name: existingUser.name,
           role: existingUser.role,
           profileComplete: existingUser.profile_complete,
           avatar_url: existingUser.avatar_url
-        };
-
-        setUser(userData);
-        localStorage.setItem('edusync_user', JSON.stringify(userData));
+        });
+        localStorage.setItem('edusync_user', JSON.stringify(existingUser));
       }
     } catch (error) {
       console.error('Sign in error:', error);

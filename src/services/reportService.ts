@@ -20,8 +20,8 @@ export class ReportService {
         .from('sessions')
         .select(`
           *,
-          tutor:tutors(*),
-          student:students(*),
+          tutor:users!sessions_tutor_id_fkey(id, name, email),
+          student:users!sessions_student_id_fkey(id, name, email),
           recording:session_recordings(*)
         `)
         .eq('id', sessionId)
