@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 
-const ASSEMBLYAI_API_KEY = '26ae3d9e3a8f4077833c7f0379f9a479';
+const ASSEMBLYAI_API_KEY = import.meta.env.VITE_ASSEMBLYAI_API_KEY;
 console.log('[AssemblyAI] Loaded API Key:', ASSEMBLYAI_API_KEY);
 const ASSEMBLYAI_BASE_URL = 'https://api.assemblyai.com/v2';
 
@@ -42,17 +42,21 @@ export class TranscriptionService {
       throw new Error('AssemblyAI API key not configured');
     }
 
+    // If audioUrl is a public URL, this works. If not, fetch the file server-side or use a signed URL from Supabase Storage.
+    const audioBlob = await fetch(audioUrl).then(r => r.blob());
+
     const response = await fetch(`${ASSEMBLYAI_BASE_URL}/upload`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${ASSEMBLYAI_API_KEY}`,
-        'Content-Type': 'application/octet-stream'
+        'Authorization': ASSEMBLYAI_API_KEY,
+        // 'Content-Type' is NOT needed for fetch with blob
       },
-      body: await fetch(audioUrl).then(r => r.blob())
+      body: audioBlob
     });
 
     if (!response.ok) {
-      throw new Error(`Upload failed: ${response.statusText}`);
+      const errorBody = await response.text();
+      throw new Error(`Upload failed: ${response.statusText} - ${errorBody}`);
     }
 
     const data = await response.json();
@@ -75,7 +79,7 @@ export class TranscriptionService {
       const transcriptResponse = await fetch(`${ASSEMBLYAI_BASE_URL}/transcript`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${ASSEMBLYAI_API_KEY}`,
+          'Authorization': ASSEMBLYAI_API_KEY,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -91,7 +95,8 @@ export class TranscriptionService {
       });
 
       if (!transcriptResponse.ok) {
-        throw new Error(`Transcription request failed: ${transcriptResponse.statusText}`);
+        const errorBody = await transcriptResponse.text();
+        throw new Error(`Transcription request failed: ${transcriptResponse.statusText} - ${errorBody}`);
       }
 
       const transcript = await transcriptResponse.json();
@@ -107,12 +112,13 @@ export class TranscriptionService {
         
         const statusResponse = await fetch(`${ASSEMBLYAI_BASE_URL}/transcript/${transcriptId}`, {
           headers: {
-            'Authorization': `Bearer ${ASSEMBLYAI_API_KEY}`
+            'Authorization': ASSEMBLYAI_API_KEY
           }
         });
         
         if (!statusResponse.ok) {
-          throw new Error(`Status check failed: ${statusResponse.statusText}`);
+          const errorBody = await statusResponse.text();
+          throw new Error(`Status check failed: ${statusResponse.statusText} - ${errorBody}`);
         }
         
         result = await statusResponse.json();
