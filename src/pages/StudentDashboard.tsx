@@ -6,7 +6,9 @@ import SessionsTab from '../components/dashboard/student/SessionsTab';
 import TutorsTab from '../components/dashboard/student/TutorsTab';
 import AnalyticsTab from '../components/dashboard/student/AnalyticsTab';
 import StudentProgressDashboard from '../components/analytics/StudentProgressDashboard';
-import { Home, Video, Users, BarChart3, Settings, Calendar, MessageCircle, TrendingUp } from 'lucide-react';
+import SettingsPanel from '../components/profile/SettingsPanel';
+import StudentProfileManager from '../components/profile/StudentProfileManager';
+import { Home, Video, Users, BarChart3, Settings, TrendingUp, User } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -31,8 +33,7 @@ const StudentDashboard: React.FC = () => {
     { id: 'tutors', label: 'My Tutors', icon: Users, count: 3 },
     { id: 'progress', label: 'Progress', icon: TrendingUp },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-    { id: 'schedule', label: 'Schedule', icon: Calendar },
-    { id: 'messages', label: 'Messages', icon: MessageCircle, count: 2 },
+    { id: 'profile', label: 'Profile', icon: User },
     { id: 'settings', label: 'Settings', icon: Settings }
   ];
 
@@ -48,12 +49,10 @@ const StudentDashboard: React.FC = () => {
         return <StudentProgressDashboard />;
       case 'analytics':
         return <AnalyticsTab />;
-      case 'schedule':
-        return <div className="text-center py-12 text-gray-400">Schedule management coming soon...</div>;
-      case 'messages':
-        return <div className="text-center py-12 text-gray-400">Messaging system coming soon...</div>;
+      case 'profile':
+        return <StudentProfileManager />;
       case 'settings':
-        return <div className="text-center py-12 text-gray-400">Settings panel coming soon...</div>;
+        return <SettingsPanel />;
       default:
         return <OverviewTab />;
     }

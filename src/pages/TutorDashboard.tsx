@@ -7,7 +7,8 @@ import RecentSessions from '../components/dashboard/RecentSessions';
 import TutorProfileManager from '../components/profile/TutorProfileManager';
 import SessionScheduler from '../components/scheduling/SessionScheduler';
 import AdvancedAnalyticsDashboard from '../components/analytics/AdvancedAnalyticsDashboard';
-import { Home, Users, Video, BarChart3, Settings, Calendar, MessageCircle, User } from 'lucide-react';
+import SettingsPanel from '../components/profile/SettingsPanel';
+import { Home, Users, Video, BarChart3, Settings, Calendar, User } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -33,7 +34,6 @@ const TutorDashboard: React.FC = () => {
     { id: 'schedule', label: 'Schedule', icon: Calendar },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'profile', label: 'Profile', icon: User },
-    { id: 'messages', label: 'Messages', icon: MessageCircle, count: 3 },
     { id: 'settings', label: 'Settings', icon: Settings }
   ];
 
@@ -51,10 +51,8 @@ const TutorDashboard: React.FC = () => {
         return <AdvancedAnalyticsDashboard />;
       case 'profile':
         return <TutorProfileManager />;
-      case 'messages':
-        return <div className="text-center py-12 text-gray-400">Messaging system coming soon...</div>;
       case 'settings':
-        return <div className="text-center py-12 text-gray-400">Settings panel coming soon...</div>;
+        return <SettingsPanel />;
       default:
         return <TutorOverviewTab />;
     }
