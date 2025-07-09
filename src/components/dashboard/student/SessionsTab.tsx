@@ -4,62 +4,37 @@ import { Video, Download, FileText, Clock, User, Play, Calendar, Filter } from '
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../lib/supabase';
 import toast from 'react-hot-toast';
+import { useAuth } from '../../../contexts/AuthContext';
+import { dbHelpers } from '../../../lib/supabase';
 
 const SessionsTab: React.FC = () => {
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const navigate = useNavigate();
 
-  const sessions = [
-    {
-      id: 1,
-      title: 'Advanced Calculus - Derivatives',
-      tutor: 'Dr. Sarah Wilson',
-      subject: 'Mathematics',
-      date: '2025-01-08',
-      time: '3:00 PM',
-      duration: 60,
-      status: 'completed',
-      engagement: 92,
-      recording: true,
-      transcript: true,
-      report: true
-    },
-    {
-      id: 2,
-      title: 'Quantum Mechanics Introduction',
-      tutor: 'Prof. Michael Chen',
-      subject: 'Physics',
-      date: '2025-01-07',
-      time: '10:00 AM',
-      duration: 45,
-      status: 'completed',
-      engagement: 88,
-      recording: true,
-      transcript: true,
-      report: true
-    },
-    {
-      id: 3,
-      title: 'Organic Chemistry Basics',
-      tutor: 'Dr. Emily Rodriguez',
-      subject: 'Chemistry',
-      date: '2025-01-09',
-      time: '2:00 PM',
-      duration: 60,
-      status: 'scheduled',
-      engagement: null,
-      recording: false,
-      transcript: false,
-      report: false
-    }
-  ];
+  const { user } = useAuth();
+  const [sessions, setSessions] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const fetchSessions = async () => {
+      if (!user) return;
+      setLoading(true);
+      const { data, error } = await dbHelpers.getSessionsWithDetails(user.id, 'student');
+      if (!error && data) {
+        setSessions(data);
+      }
+      setLoading(false);
+    };
+    fetchSessions();
+  }, [user]);
 
   const filteredSessions = sessions.filter(session => {
     const matchesFilter = filter === 'all' || session.status === filter;
-    const matchesSearch = session.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         session.tutor.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         session.subject.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch =
+      (session.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      session.tutor?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      session.subject?.toLowerCase().includes(searchTerm.toLowerCase()));
     return matchesFilter && matchesSearch;
   });
 
@@ -153,7 +128,19 @@ const SessionsTab: React.FC = () => {
 
       {/* Sessions List */}
       <div className="space-y-4">
-        {filteredSessions.map((session, index) => (
+        {loading ? (
+          <div className="flex items-center justify-center h-40">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-500"></div>
+          </div>
+        ) : filteredSessions.length === 0 ? (
+          <div className="text-gray-400 text-center py-8">No sessions found.</div>
+        ) : filteredSessions.map((session, index) => {
+          const tutorName = session.tutor?.name || 'Unknown';
+          const dateObj = session.scheduled_at ? new Date(session.scheduled_at) : null;
+          const date = dateObj ? dateObj.toLocaleDateString() : '-';
+          const time = dateObj ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-';
+          const engagement = session.engagement_score ?? null;
+          return (
           <motion.div
             key={session.id}
             initial={{ opacity: 0, y: 20 }}
@@ -172,15 +159,15 @@ const SessionsTab: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-400">
                     <div className="flex items-center space-x-1">
                       <User className="h-4 w-4" />
-                      <span>{session.tutor}</span>
+                      <span>{tutorName}</span>
                     </div>
                     <div className="flex items-center space-x-1">
                       <Calendar className="h-4 w-4" />
-                      <span>{session.date} at {session.time}</span>
+                      <span>{date} at {time}</span>
                     </div>
                     <div className="flex items-center space-x-1">
                       <Clock className="h-4 w-4" />
-                      <span>{session.duration} min</span>
+                      <span>{session.duration_minutes} min</span>
                     </div>
                   </div>
                   <div className="mt-2">
@@ -197,9 +184,9 @@ const SessionsTab: React.FC = () => {
                   <div className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBg(session.status)} ${getStatusColor(session.status)}`}>
                     {session.status.charAt(0).toUpperCase() + session.status.slice(1)}
                   </div>
-                  {session.engagement && (
+                  {engagement && (
                     <div className="text-sm text-gray-400 mt-1">
-                      Engagement: <span className="text-accent-emerald">{session.engagement}%</span>
+                      Engagement: <span className="text-accent-emerald">{engagement}%</span>
                     </div>
                   )}
                 </div>
@@ -254,7 +241,7 @@ const SessionsTab: React.FC = () => {
               </div>
             </div>
           </motion.div>
-        ))}
+        })}
       </div>
 
       {filteredSessions.length === 0 && (

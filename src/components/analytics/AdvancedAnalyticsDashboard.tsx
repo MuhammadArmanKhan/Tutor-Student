@@ -15,6 +15,7 @@ import {
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { dbHelpers } from '../../lib/supabase';
 
 interface SessionAnalytics {
   session_id: string;
@@ -50,52 +51,44 @@ const AdvancedAnalyticsDashboard: React.FC = () => {
 
   const loadAnalytics = async () => {
     try {
-      // Generate mock analytics data for demonstration
-      const mockAnalytics: SessionAnalytics[] = [
-        {
-          session_id: '1',
-          session_title: 'Advanced Calculus',
-          student_name: 'Alex Johnson',
-          date: '2025-01-08',
-          duration: 60,
-          speaking_ratios: { tutor: 65, student: 35 },
-          total_interactions: 24,
-          average_attention: 87,
-          question_count: 8,
-          topics_covered: ['Derivatives', 'Chain Rule', 'Applications'],
-          engagement_score: 87
-        },
-        {
-          session_id: '2',
-          session_title: 'Quantum Physics',
-          student_name: 'Emma Chen',
-          date: '2025-01-07',
-          duration: 45,
-          speaking_ratios: { tutor: 70, student: 30 },
-          total_interactions: 18,
-          average_attention: 92,
-          question_count: 12,
-          topics_covered: ['Wave Functions', 'Uncertainty Principle'],
-          engagement_score: 92
-        },
-        {
-          session_id: '3',
-          session_title: 'Organic Chemistry',
-          student_name: 'Michael Rodriguez',
-          date: '2025-01-06',
-          duration: 50,
-          speaking_ratios: { tutor: 60, student: 40 },
-          total_interactions: 32,
-          average_attention: 78,
-          question_count: 15,
-          topics_covered: ['Molecular Structure', 'Bonding', 'Reactions'],
-          engagement_score: 78
-        }
-      ];
-
-      setAnalytics(mockAnalytics);
+      if (!user) return;
+      setLoading(true);
+      // Fetch analytics for all sessions of this tutor
+      const { data: sessions, error: sessionsError } = await dbHelpers.getSessionsWithDetails(user.id, 'tutor');
+      if (sessionsError || !sessions) throw sessionsError;
+      const sessionIds = sessions.map((s: any) => s.id);
+      if (sessionIds.length === 0) {
+        setAnalytics([]);
+        setLoading(false);
+        return;
+      }
+      // Fetch analytics for these sessions
+      const { data: analyticsData, error: analyticsError } = await supabase
+        .from('session_analytics')
+        .select('*')
+        .in('session_id', sessionIds);
+      if (analyticsError) throw analyticsError;
+      // Map analytics to dashboard structure
+      const analytics = analyticsData.map((a: any) => {
+        const session = sessions.find((s: any) => s.id === a.session_id);
+        return {
+          session_id: a.session_id,
+          session_title: session?.title || '-',
+          student_name: session?.student?.name || '-',
+          date: session?.scheduled_at ? new Date(session.scheduled_at).toLocaleDateString() : '-',
+          duration: session?.duration_minutes || 0,
+          speaking_ratios: a.speaking_ratios || { tutor: 0, student: 0 },
+          total_interactions: a.total_interactions || 0,
+          average_attention: a.average_attention || 0,
+          question_count: a.question_count || 0,
+          topics_covered: a.topics_covered || [],
+          engagement_score: session?.engagement_score || 0
+        };
+      });
+      setAnalytics(analytics);
     } catch (error) {
       console.error('Error loading analytics:', error);
+      setAnalytics([]);
     } finally {
       setLoading(false);
     }
@@ -103,14 +96,18 @@ const AdvancedAnalyticsDashboard: React.FC = () => {
 
   const loadStudents = async () => {
     try {
-      const mockStudents = [
-        { id: '1', name: 'Alex Johnson' },
-        { id: '2', name: 'Emma Chen' },
-        { id: '3', name: 'Michael Rodriguez' }
-      ];
-      setStudents(mockStudents);
+      if (!user) return;
+      // Fetch students for this tutor
+      const { data, error } = await supabase
+        .from('tutor_students')
+        .select('student:users!tutor_students_student_id_fkey(id, name)')
+        .eq('tutor_id', user.id)
+        .eq('status', 'active');
+      if (error) throw error;
+      setStudents(data.map((item: any) => item.student));
     } catch (error) {
       console.error('Error loading students:', error);
+      setStudents([]);
     }
   };
 

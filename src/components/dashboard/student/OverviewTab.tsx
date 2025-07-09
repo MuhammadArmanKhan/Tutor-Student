@@ -5,9 +5,14 @@ import StatsCards from '../StatsCards';
 import EngagementChart from '../EngagementChart';
 import TutorPerformance from '../TutorPerformance';
 import { Calendar, Clock, TrendingUp, Award, Video } from 'lucide-react';
+import { supabase } from '../../../lib/supabase';
+import { useAuth } from '../../../contexts/AuthContext';
+import toast from 'react-hot-toast';
 
 const OverviewTab: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [creatingDemo, setCreatingDemo] = React.useState(false);
 
   const upcomingSessions = [
     {
@@ -49,10 +54,47 @@ const OverviewTab: React.FC = () => {
     }
   ];
 
-  const joinDemoSession = () => {
-    // Create a mock session for demonstration
-    const mockSessionId = 'demo-session-' + Date.now();
-    navigate(`/session/${mockSessionId}`);
+  const joinDemoSession = async () => {
+    if (!user) {
+      toast.error('You must be logged in as a student to start a demo session.');
+      return;
+    }
+    setCreatingDemo(true);
+    try {
+      // Find a demo tutor (or use a fixed demo tutor ID)
+      const { data: tutorData, error: tutorError } = await supabase
+        .from('users')
+        .select('id, name, email')
+        .eq('role', 'tutor')
+        .limit(1)
+        .single();
+      if (tutorError || !tutorData) {
+        throw new Error('No demo tutor found.');
+      }
+      // Insert a demo session
+      const { data: sessionData, error: sessionError } = await supabase
+        .from('sessions')
+        .insert({
+          tutor_id: tutorData.id,
+          student_id: user.id,
+          title: 'Demo Session',
+          subject: 'Mathematics',
+          scheduled_at: new Date().toISOString(),
+          duration_minutes: 30,
+          status: 'in_progress',
+          notes: 'This is a demo session.'
+        })
+        .select('id')
+        .single();
+      if (sessionError || !sessionData) {
+        throw new Error('Failed to create demo session.');
+      }
+      navigate(`/session/${sessionData.id}`);
+    } catch (err) {
+      toast.error('Could not start demo session.');
+    } finally {
+      setCreatingDemo(false);
+    }
   };
 
   return (
@@ -72,12 +114,20 @@ const OverviewTab: React.FC = () => {
           </div>
           <motion.button
             onClick={joinDemoSession}
+            disabled={creatingDemo}
             className="bg-gradient-to-r from-primary-500 to-accent-emerald text-white px-6 py-3 rounded-xl font-semibold hover:shadow-lg transition-all duration-200 flex items-center space-x-2 w-full md:w-auto justify-center"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >
-            <Video className="h-5 w-5" />
-            <span>Join Demo Session</span>
+            {creatingDemo ? (
+              <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            ) : (
+              <Video className="h-5 w-5" />
+            )}
+            <span>{creatingDemo ? 'Creating Demo...' : 'Join Demo Session'}</span>
           </motion.button>
         </div>
       </motion.div>
@@ -125,10 +175,18 @@ const OverviewTab: React.FC = () => {
                   </span>
                   <motion.button
                     onClick={joinDemoSession}
+                    disabled={creatingDemo}
                     className="text-primary-500 hover:text-primary-400 text-sm font-medium px-3 py-1 rounded-lg hover:bg-primary-500/10 transition-all duration-200"
                     whileHover={{ scale: 1.05 }}
                   >
-                    Join Session
+                    {creatingDemo ? (
+                      <svg className="animate-spin h-4 w-4 text-primary-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                    ) : (
+                      'Join Session'
+                    )}
                   </motion.button>
                 </div>
               </motion.div>
@@ -176,11 +234,19 @@ const OverviewTab: React.FC = () => {
           {/* Demo Session Button */}
           <motion.button
             onClick={joinDemoSession}
+            disabled={creatingDemo}
             className="w-full mt-6 bg-gradient-to-r from-accent-emerald/20 to-primary-500/20 text-white py-3 px-4 rounded-xl hover:from-accent-emerald/30 hover:to-primary-500/30 transition-all duration-200 font-medium border border-accent-emerald/30"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
-            🎯 Try Demo Session Recording
+            {creatingDemo ? (
+              <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            ) : (
+              '🎯 Try Demo Session Recording'
+            )}
           </motion.button>
         </motion.div>
       </div>

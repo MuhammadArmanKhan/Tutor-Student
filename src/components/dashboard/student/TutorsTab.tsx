@@ -1,65 +1,40 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Star, MessageCircle, Calendar, Search, Filter, Award, Clock, BookOpen } from 'lucide-react';
+import { useAuth } from '../../../contexts/AuthContext';
+import { supabase } from '../../../lib/supabase';
 
 const TutorsTab: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [subjectFilter, setSubjectFilter] = useState('all');
 
-  const tutors = [
-    {
-      id: 1,
-      name: 'Dr. Sarah Wilson',
-      avatar: 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=400',
-      subjects: ['Mathematics', 'Statistics'],
-      rating: 4.9,
-      totalSessions: 24,
-      hourlyRate: 75,
-      experience: '8 years',
-      bio: 'PhD in Mathematics with extensive experience in calculus and advanced mathematics.',
-      certifications: ['PhD Mathematics', 'Teaching Certificate'],
-      nextAvailable: 'Today 3:00 PM',
-      responseTime: '< 1 hour',
-      languages: ['English', 'Spanish']
-    },
-    {
-      id: 2,
-      name: 'Prof. Michael Chen',
-      avatar: 'https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg?auto=compress&cs=tinysrgb&w=400',
-      subjects: ['Physics', 'Engineering'],
-      rating: 4.8,
-      totalSessions: 18,
-      hourlyRate: 80,
-      experience: '12 years',
-      bio: 'Professor of Physics specializing in quantum mechanics and theoretical physics.',
-      certifications: ['PhD Physics', 'University Professor'],
-      nextAvailable: 'Tomorrow 10:00 AM',
-      responseTime: '< 2 hours',
-      languages: ['English', 'Mandarin']
-    },
-    {
-      id: 3,
-      name: 'Dr. Emily Rodriguez',
-      avatar: 'https://images.pexels.com/photos/1130626/pexels-photo-1130626.jpeg?auto=compress&cs=tinysrgb&w=400',
-      subjects: ['Chemistry', 'Biology'],
-      rating: 4.7,
-      totalSessions: 22,
-      hourlyRate: 70,
-      experience: '6 years',
-      bio: 'Chemistry PhD with expertise in organic chemistry and biochemistry.',
-      certifications: ['PhD Chemistry', 'Research Scientist'],
-      nextAvailable: 'Today 6:00 PM',
-      responseTime: '< 30 min',
-      languages: ['English', 'French']
-    }
-  ];
+  const { user } = useAuth();
+  const [tutors, setTutors] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
 
-  const subjects = ['all', 'Mathematics', 'Physics', 'Chemistry', 'Biology', 'Engineering', 'Statistics'];
+  React.useEffect(() => {
+    const fetchTutors = async () => {
+      if (!user) return;
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('tutor_students')
+        .select('tutor:users!tutor_students_tutor_id_fkey(id, name, avatar_url, subjects, rating, total_sessions, hourly_rate, experience_years, bio, certifications, timezone)')
+        .eq('student_id', user.id)
+        .eq('status', 'active');
+      if (!error && data) {
+        setTutors(data.map((item: any) => item.tutor));
+      }
+      setLoading(false);
+    };
+    fetchTutors();
+  }, [user]);
+
+  const subjects = ['all', ...Array.from(new Set(tutors.flatMap(t => t.subjects || [])))];
 
   const filteredTutors = tutors.filter(tutor => {
-    const matchesSearch = tutor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         tutor.subjects.some(subject => subject.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesSubject = subjectFilter === 'all' || tutor.subjects.includes(subjectFilter);
+    const matchesSearch = tutor.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (tutor.subjects || []).some((subject: string) => subject.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesSubject = subjectFilter === 'all' || (tutor.subjects || []).includes(subjectFilter);
     return matchesSearch && matchesSubject;
   });
 
@@ -100,7 +75,19 @@ const TutorsTab: React.FC = () => {
 
       {/* Tutors Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {filteredTutors.map((tutor, index) => (
+        {loading ? (
+          <div className="flex items-center justify-center h-40">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-500"></div>
+          </div>
+        ) : filteredTutors.length === 0 ? (
+          <div className="text-center py-12">
+            <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-white mb-2">No Tutors Found</h3>
+            <p className="text-gray-400">
+              {searchTerm ? 'No tutors match your search criteria.' : 'No tutors available for the selected subject.'}
+            </p>
+          </div>
+        ) : filteredTutors.map((tutor, index) => (
           <motion.div
             key={tutor.id}
             initial={{ opacity: 0, y: 20 }}
@@ -111,7 +98,7 @@ const TutorsTab: React.FC = () => {
             {/* Tutor Header */}
             <div className="flex items-start space-x-4 mb-4">
               <img
-                src={tutor.avatar}
+                src={tutor.avatar_url}
                 alt={tutor.name}
                 className="w-16 h-16 rounded-full object-cover flex-shrink-0"
               />
@@ -120,16 +107,16 @@ const TutorsTab: React.FC = () => {
                 <div className="flex items-center space-x-1 mb-1">
                   <Star className="h-4 w-4 text-yellow-400 fill-current" />
                   <span className="text-yellow-400 font-medium">{tutor.rating}</span>
-                  <span className="text-gray-400 text-sm">({tutor.totalSessions} sessions)</span>
+                  <span className="text-gray-400 text-sm">({tutor.total_sessions} sessions)</span>
                 </div>
-                <div className="text-primary-500 font-semibold">${tutor.hourlyRate}/hour</div>
+                <div className="text-primary-500 font-semibold">${tutor.hourly_rate}/hour</div>
               </div>
             </div>
 
             {/* Subjects */}
             <div className="mb-4">
               <div className="flex flex-wrap gap-2">
-                {tutor.subjects.map((subject, idx) => (
+                {(tutor.subjects || []).map((subject: string, idx: number) => (
                   <span
                     key={idx}
                     className="px-3 py-1 bg-primary-500/20 text-primary-400 rounded-full text-xs font-medium"
@@ -148,7 +135,7 @@ const TutorsTab: React.FC = () => {
               <div className="text-center p-3 bg-white/5 rounded-lg">
                 <div className="flex items-center justify-center space-x-1 mb-1">
                   <Award className="h-4 w-4 text-accent-emerald" />
-                  <span className="text-white font-medium text-sm">{tutor.experience}</span>
+                  <span className="text-white font-medium text-sm">{tutor.experience_years}</span>
                 </div>
                 <div className="text-xs text-gray-400">Experience</div>
               </div>
@@ -167,7 +154,7 @@ const TutorsTab: React.FC = () => {
                 <Calendar className="h-4 w-4 text-accent-emerald" />
                 <span className="text-accent-emerald text-sm font-medium">Next Available:</span>
               </div>
-              <div className="text-white text-sm mt-1">{tutor.nextAvailable}</div>
+              <div className="text-white text-sm mt-1">{tutor.timezone || ''}</div>
             </div>
 
             {/* Actions */}

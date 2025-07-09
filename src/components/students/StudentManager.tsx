@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { UserPlus, Search, Mail, BookOpen, TrendingUp, X } from 'lucide-react';
+import { UserPlus, Search, Mail, BookOpen, TrendingUp, X, Calendar } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
@@ -26,6 +26,16 @@ const StudentManager: React.FC = () => {
     email: '',
     subject: '',
     message: ''
+  });
+
+  // Add milestone modal state
+  const [showMilestoneModal, setShowMilestoneModal] = useState(false);
+  const [milestoneStudent, setMilestoneStudent] = useState<Student | null>(null);
+  const [milestoneForm, setMilestoneForm] = useState({
+    milestone_name: '',
+    description: '',
+    target_date: '',
+    completion_percentage: 0
   });
 
   useEffect(() => {
@@ -216,6 +226,47 @@ const StudentManager: React.FC = () => {
     }
   };
 
+  // Handler to open milestone modal
+  const openMilestoneModal = (student: Student) => {
+    setMilestoneStudent(student);
+    setMilestoneForm({
+      milestone_name: '',
+      description: '',
+      target_date: '',
+      completion_percentage: 0
+    });
+    setShowMilestoneModal(true);
+  };
+
+  // Handler to submit milestone
+  const submitMilestone = async () => {
+    if (!milestoneStudent || !milestoneForm.milestone_name || !milestoneForm.target_date) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+    try {
+      await supabase.from('learning_milestones').insert({
+        student_id: milestoneStudent.id,
+        tutor_id: user?.id,
+        subject: milestoneStudent.subjects[0] || '',
+        milestone_name: milestoneForm.milestone_name,
+        description: milestoneForm.description,
+        target_date: milestoneForm.target_date,
+        completion_percentage: milestoneForm.completion_percentage,
+        status: milestoneForm.completion_percentage >= 100 ? 'completed' : 'in_progress',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+      toast.success('Milestone added!');
+      setShowMilestoneModal(false);
+      setMilestoneStudent(null);
+      setMilestoneForm({ milestone_name: '', description: '', target_date: '', completion_percentage: 0 });
+      // Optionally reload students or milestones here
+    } catch (error) {
+      toast.error('Failed to add milestone');
+    }
+  };
+
   const filteredStudents = students.filter(student =>
     student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     student.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -338,6 +389,7 @@ const StudentManager: React.FC = () => {
             >
               View Details
             </motion.button>
+            <button onClick={() => openMilestoneModal(student)} className="ml-2 px-2 py-1 bg-blue-500 text-white rounded">Add Milestone</button>
           </motion.div>
         ))}
       </div>
@@ -430,6 +482,34 @@ const StudentManager: React.FC = () => {
               </motion.button>
             </div>
           </motion.div>
+        </div>
+      )}
+
+      {showMilestoneModal && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-semibold mb-4">Add Learning Milestone</h2>
+            <div className="mb-3">
+              <label className="block text-gray-700 mb-1">Milestone Name</label>
+              <input type="text" className="w-full border rounded px-3 py-2" value={milestoneForm.milestone_name} onChange={e => setMilestoneForm(f => ({ ...f, milestone_name: e.target.value }))} />
+            </div>
+            <div className="mb-3">
+              <label className="block text-gray-700 mb-1">Description</label>
+              <textarea className="w-full border rounded px-3 py-2" value={milestoneForm.description} onChange={e => setMilestoneForm(f => ({ ...f, description: e.target.value }))} />
+            </div>
+            <div className="mb-3">
+              <label className="block text-gray-700 mb-1">Target Date</label>
+              <input type="date" className="w-full border rounded px-3 py-2" value={milestoneForm.target_date} onChange={e => setMilestoneForm(f => ({ ...f, target_date: e.target.value }))} />
+            </div>
+            <div className="mb-3">
+              <label className="block text-gray-700 mb-1">Completion (%)</label>
+              <input type="number" min="0" max="100" className="w-full border rounded px-3 py-2" value={milestoneForm.completion_percentage} onChange={e => setMilestoneForm(f => ({ ...f, completion_percentage: Number(e.target.value) }))} />
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setShowMilestoneModal(false)} className="px-4 py-2 bg-gray-300 rounded">Cancel</button>
+              <button onClick={submitMilestone} className="px-4 py-2 bg-blue-600 text-white rounded">Add</button>
+            </div>
+          </div>
         </div>
       )}
     </motion.div>

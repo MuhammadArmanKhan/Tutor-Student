@@ -26,6 +26,10 @@ export class ReportService {
         .eq('id', sessionId)
         .single();
 
+      if (error || !sessionData) {
+        throw new Error('Session not found');
+      }
+
       // Fetch recording data separately to ensure it's retrieved
       const { data: recordingData, error: recordingError } = await supabase
         .from('session_recordings')
@@ -33,14 +37,89 @@ export class ReportService {
         .eq('session_id', sessionId)
         .single();
 
-      console.log('Session data for report:', sessionData);
-      console.log('Recording data:', recordingData);
-
       // Combine the data
       const fullSessionData = {
         ...sessionData,
         recording: recordingData
       };
+
+      // Fetch learning milestones for the student
+      let milestones = [];
+      if (fullSessionData.student?.id) {
+        const { data: milestonesData, error: milestonesError } = await supabase
+          .from('learning_milestones')
+          .select('*')
+          .eq('student_id', fullSessionData.student.id);
+        if (!milestonesError && milestonesData) {
+          milestones = milestonesData;
+        }
+      }
+
+      // Fetch progress tracking for the student
+      let progress = null;
+      if (fullSessionData.student?.id) {
+        const { data: progressData, error: progressError } = await supabase
+          .from('progress_tracking')
+          .select('*')
+          .eq('student_id', fullSessionData.student.id)
+          .single();
+        if (!progressError && progressData) {
+          progress = progressData;
+        }
+      }
+
+      // Update or insert progress tracking for this student
+      if (fullSessionData.student?.id && fullSessionData.tutor?.id) {
+        if (progress) {
+          // Update
+          await supabase
+            .from('progress_tracking')
+            .update({
+              total_sessions: (progress.total_sessions || 0) + 1,
+              completed_sessions: (progress.completed_sessions || 0) + 1,
+              // Optionally update other fields here
+              last_updated: new Date().toISOString()
+            })
+            .eq('id', progress.id);
+        } else {
+          // Insert (FIX: include subject)
+          await supabase
+            .from('progress_tracking')
+            .insert({
+              student_id: fullSessionData.student.id,
+              tutor_id: fullSessionData.tutor.id,
+              subject: fullSessionData.subject, // <-- Added subject
+              total_sessions: 1,
+              completed_sessions: 1,
+              completion_rate: 100,
+              average_engagement: fullSessionData.engagement_score || 0,
+              last_updated: new Date().toISOString(),
+              created_at: new Date().toISOString()
+            });
+        }
+      }
+
+      // DEMO: Insert a default milestone if none exist for this student/subject
+      if (fullSessionData.student?.id && fullSessionData.tutor?.id && fullSessionData.subject) {
+        if (!milestones || milestones.length === 0) {
+          await supabase.from('learning_milestones').insert({
+            student_id: fullSessionData.student.id,
+            tutor_id: fullSessionData.tutor.id,
+            subject: fullSessionData.subject,
+            milestone_name: 'First Session Completed',
+            description: 'Student attended their first session.',
+            target_date: new Date(),
+            completed_date: new Date(),
+            completion_percentage: 100,
+            status: 'completed',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+        }
+      }
+
+      console.log('Session data for report:', sessionData);
+      console.log('Recording data:', recordingData);
 
       // Generate PDF
       const pdf = new jsPDF();
@@ -157,6 +236,46 @@ export class ReportService {
         pdf.text(lines, 20, yPos);
         yPos += lines.length * 5 + 5;
       });
+
+      // Learning Milestones Section
+      pdf.setFontSize(16);
+      pdf.text('Learning Milestones', 20, yPos + 20);
+      yPos += 35;
+      if (milestones && milestones.length > 0) {
+        milestones.slice(0, 3).forEach((milestone: any) => {
+          const text = `• ${milestone.milestone_name}: ${milestone.status} (${milestone.completion_percentage}%)`;
+          const lines = pdf.splitTextToSize(text, pageWidth - 40);
+          pdf.setFontSize(12);
+          pdf.text(lines, 20, yPos);
+          yPos += lines.length * 5 + 5;
+        });
+      } else {
+        pdf.setFontSize(12);
+        pdf.text('No milestones found.', 20, yPos);
+        yPos += 10;
+      }
+
+      // Progress Tracking Section
+      pdf.setFontSize(16);
+      pdf.text('Progress Tracking', 20, yPos + 20);
+      yPos += 35;
+      if (progress) {
+        pdf.setFontSize(12);
+        pdf.text(`Total Sessions: ${progress.total_sessions}`, 20, yPos); yPos += 10;
+        pdf.text(`Completed Sessions: ${progress.completed_sessions}`, 20, yPos); yPos += 10;
+        pdf.text(`Completion Rate: ${progress.completion_rate}%`, 20, yPos); yPos += 10;
+        pdf.text(`Average Engagement: ${progress.average_engagement}%`, 20, yPos); yPos += 10;
+        if (progress.strengths && progress.strengths.length > 0) {
+          pdf.text(`Strengths: ${progress.strengths.join(', ')}`, 20, yPos); yPos += 10;
+        }
+        if (progress.areas_for_improvement && progress.areas_for_improvement.length > 0) {
+          pdf.text(`Areas for Improvement: ${progress.areas_for_improvement.join(', ')}`, 20, yPos); yPos += 10;
+        }
+      } else {
+        pdf.setFontSize(12);
+        pdf.text('No progress data found.', 20, yPos);
+        yPos += 10;
+      }
 
       // Save PDF
       const pdfBlob = pdf.output('blob');
