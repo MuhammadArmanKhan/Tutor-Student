@@ -1,0 +1,200 @@
+# Tutor-Student Platform: Technical Reference
+
+---
+
+## Project Overview
+
+**Purpose:**
+- A next-generation online learning platform (EduSync) connecting students, tutors, and parents for live, AI-enhanced educational sessions.
+
+**Core Features:**
+- Student and tutor dashboards with analytics and progress tracking
+- Live session scheduling, monitoring, and recording
+- AI-powered engagement and performance analytics
+- Automated session reports and email notifications
+- Role-based authentication (student, tutor, parent)
+- Modern, responsive UI with Tailwind CSS and React
+- Notification preferences stored in the users table (JSON field)
+- StudentProfileManager for student profile editing
+- UI/UX polish for accessibility, responsiveness, and consistency
+
+**High-Level Goals:**
+- Enhance online learning outcomes with data-driven insights
+- Streamline session management for tutors and students
+- Provide actionable feedback and progress reports
+- Support scalable, maintainable, and extensible architecture
+
+---
+
+## Data Workflow
+
+- **Frontend State:**
+  - Managed via React context (`AuthContext`) for authentication and user state
+  - Local state in components for UI and data fetching
+- **APIs & Services:**
+  - Supabase as backend (database, authentication, storage, edge functions)
+  - Custom services for audio monitoring, recording, transcription, reporting, and email
+  - Edge function for sending emails (`supabase/functions/send-email`)
+- **Database:**
+  - Supabase Postgres with tables for users, sessions, profiles, analytics, recordings, reports, milestones, and progress
+  - `users` table now includes a `notification_preferences` JSONB field (e.g., `{ "email": true, "push": false }`)
+- **External Integrations:**
+  - AssemblyAI for transcription and AI insights
+  - Email delivery via edge function (can be extended to SendGrid, Mailgun, etc.)
+
+---
+
+## UI Workflow
+
+- **User Journey:**
+  1. **Landing Page:** Introduction, features, demo, pricing, testimonials
+  2. **Auth Page:** Sign up or log in as student, tutor, or parent (demo logins available)
+  3. **Dashboard:**
+     - **Student:** Overview, sessions, tutors, progress, analytics, profile, settings
+     - **Tutor:** Overview, students, sessions, schedule, analytics, profile, settings
+  4. **Session Page:** Live/recorded session details, notes, recording, downloads
+  5. **Session Monitoring:** Real-time engagement and audio analytics (tutor view)
+- **Navigation:**
+  - React Router for page transitions
+  - Tab navigation within dashboards
+- **User Interactions:**
+  - Scheduling/joining sessions, recording, note-taking, analytics viewing, report downloads, profile management
+  - Real-time feedback and toast notifications
+  - Notification preferences managed in settings panel
+
+---
+
+## Notification Logic
+
+- Notification preferences are stored in the `users` table as a JSONB field.
+- When a key event occurs (e.g., session scheduled), backend logic fetches the user's preferences and sends an email notification if enabled.
+- Email notifications are sent via a Supabase Edge Function (`send-email`).
+- Push notifications can be added in the future by extending the preferences and backend logic.
+
+---
+
+## Page-by-Page Breakdown
+
+### 1. Landing Page (`src/pages/LandingPage.tsx`)
+- **Features:** Overview, features, demo, pricing, testimonials, footer
+- **Components:**
+  - `Header`, `HeroSection`, `FeaturesSection`, `DemoSection`, `PricingSection`, `TestimonialsSection`, `Footer`
+- **APIs/Logic:** None (static content)
+
+### 2. Auth Page (`src/pages/AuthPage.tsx`)
+- **Features:** Login, signup, demo login, role selection
+- **Components:** Inline form logic, uses `useAuth` context
+- **APIs/Logic:**
+  - `signIn`, `signUp`, `demoLogin` from `AuthContext`
+  - Navigation to dashboards on success
+
+### 3. Student Dashboard (`src/pages/StudentDashboard.tsx`)
+- **Tabs/Features:**
+  - **Overview:** Welcome, stats, upcoming sessions, achievements (`OverviewTab`)
+  - **Sessions:** List, search, filter, join sessions (`SessionsTab`)
+  - **My Tutors:** List, search, filter tutors (`TutorsTab`)
+  - **Progress:** Progress dashboard (`StudentProgressDashboard`)
+  - **Analytics:** Performance, charts, subject progress, tracker (`AnalyticsTab`, `ProgressTracker`)
+  - **Profile:** Student profile management (`StudentProfileManager`)
+  - **Settings:** Notification preferences, account info, password change (`SettingsPanel`)
+- **Components:**
+  - `DashboardLayout`, `TabNavigation`, tab components, analytics/progress components
+- **APIs/Logic:**
+  - Data fetching via `dbHelpers` and Supabase queries
+  - State managed per tab
+
+### 4. Tutor Dashboard (`src/pages/TutorDashboard.tsx`)
+- **Tabs/Features:**
+  - **Overview:** Welcome, stats, live session monitor, feedback (`TutorOverviewTab`)
+  - **Students:** Manage students (`StudentManager`)
+  - **Sessions:** Recent sessions (`RecentSessions`)
+  - **Schedule:** Session scheduling (`SessionScheduler`)
+  - **Analytics:** Advanced analytics dashboard (`AdvancedAnalyticsDashboard`)
+  - **Profile:** Profile management (`TutorProfileManager`)
+  - **Settings:** Notification preferences, account info, password change (`SettingsPanel`)
+- **Components:**
+  - `DashboardLayout`, `TabNavigation`, tab components, analytics components
+- **APIs/Logic:**
+  - Data fetching via `dbHelpers` and Supabase queries
+
+### 5. Session Page (`src/pages/SessionPage.tsx`)
+- **Features:** Session info, live/recorded status, engagement, notes, recording, downloads
+- **Components:**
+  - `DashboardLayout`, `SessionRecorder`, `DownloadManager`
+- **APIs/Logic:**
+  - Fetch session details, update notes, handle recording/upload, show download links
+
+### 6. Session Monitoring Page (`src/components/session/SessionMonitoringPage.tsx`)
+- **Features:** Real-time audio monitoring, engagement metrics, topic tracking, quick notes
+- **Components:**
+  - `AudioMonitoringService`, custom UI for metrics and controls
+- **APIs/Logic:**
+  - Start/stop monitoring, save analytics to DB, update session status
+
+---
+
+## Database Schema (Supabase)
+
+### Tables & Key Fields
+- **users**: id, email, name, role, profile_complete, avatar_url, last_login, created_at, updated_at, notification_preferences (jsonb)
+- **tutor_profiles**: id, user_id, certifications, subjects, bio, hourly_rate, experience_years, rating, total_sessions, availability, timezone, profile_image_url, created_at, updated_at
+- **student_profiles**: id, user_id, parent_id, grade_level, subjects_of_interest, learning_goals, age, school, emergency_contact, created_at, updated_at
+- **sessions**: id, tutor_id, student_id, title, subject, scheduled_at, started_at, completed_at, duration_minutes, status, recording_url, transcript_url, engagement_score, notes, meeting_url, session_type, materials_shared, homework_assigned, created_at, updated_at
+- **session_recordings**: id, session_id, video_url, audio_url, transcript, speaker_labels, ai_insights, file_size, duration_seconds, processing_status, thumbnail_url, chapters, created_at
+- **session_reports**: id, session_id, pdf_url, email_sent, engagement_metrics, ai_summary, recommendations, created_at
+- **tutor_students**: id, tutor_id, student_id, subject, status, created_at
+- **learning_milestones**: id, student_id, tutor_id, subject, milestone_name, description, target_date, completed_date, completion_percentage, status, created_at, updated_at
+- **session_analytics**: session_id, audio_metrics, engagement_metrics, speaking_ratios, total_interactions, average_attention, question_count, topics_covered, notes, created_at
+- **progress_tracking**: id, student_id, tutor_id, subject, total_sessions, completed_sessions, completion_rate, average_engagement, time_spent_minutes, active_participation_rate, learning_velocity, strengths, areas_for_improvement, last_updated, created_at
+
+### Relationships
+- `users` ↔ `tutor_profiles`/`student_profiles` (1:1)
+- `sessions` ↔ `users` (tutor_id, student_id foreign keys)
+- `sessions` ↔ `session_recordings`, `session_reports`, `session_analytics` (1:1)
+- `tutor_students` (many-to-many between tutors and students)
+- `learning_milestones`/`progress_tracking` reference students, tutors, and subjects
+
+### Indexing
+- Primary keys on all tables
+- Foreign key indexes on user/session relationships
+- Indexes on frequently queried fields (e.g., email, role, status)
+
+---
+
+## Technical Architecture
+
+### Frameworks, Libraries, Tools
+- **Frontend:** React, TypeScript, Vite, Tailwind CSS, Framer Motion, React Router, Lucide React, Recharts, React Hot Toast
+- **Backend/Services:** Supabase (Postgres, Auth, Storage, Edge Functions), AssemblyAI (transcription/AI), jsPDF, html2canvas, RecordRTC
+- **Dev Tools:** ESLint, TypeScript, PostCSS, Autoprefixer
+
+### Folder Structure
+- `src/pages/` — Top-level pages (Landing, Auth, Dashboards, Session)
+- `src/components/` — UI components (dashboard, analytics, session, profile, etc.)
+- `src/contexts/` — React context providers (Auth)
+- `src/lib/` — Supabase client and DB helpers
+- `src/services/` — Business logic/services (audio, recording, transcription, reporting, email)
+- `supabase/functions/` — Edge functions (send-email)
+
+### State Management
+- React Context for authentication/user state
+- Local state/hooks for UI and data
+
+### Authentication & Authorization
+- Supabase Auth for sign up, login, session management
+- Role-based access enforced in UI and backend queries
+- Auth state persisted in localStorage and synced with Supabase
+
+### DevOps/Deployment
+- Vite for local dev and builds
+- Supabase for backend hosting and edge functions
+- Static frontend deployable to Vercel, Netlify, or similar
+- Environment variables for API keys (AssemblyAI, Supabase)
+
+---
+
+## Suggested Enhancements & Best Practices
+
+- Add more detailed README and onboarding docs
+- Extend notification logic for more event types and push notifications
+- Continue UI/UX polish and accessibility improvements 

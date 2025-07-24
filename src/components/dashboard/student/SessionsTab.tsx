@@ -4,62 +4,37 @@ import { Video, Download, FileText, Clock, User, Play, Calendar, Filter } from '
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../lib/supabase';
 import toast from 'react-hot-toast';
+import { useAuth } from '../../../contexts/AuthContext';
+import { dbHelpers } from '../../../lib/supabase';
 
 const SessionsTab: React.FC = () => {
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const navigate = useNavigate();
 
-  const sessions = [
-    {
-      id: 1,
-      title: 'Advanced Calculus - Derivatives',
-      tutor: 'Dr. Sarah Wilson',
-      subject: 'Mathematics',
-      date: '2025-01-08',
-      time: '3:00 PM',
-      duration: 60,
-      status: 'completed',
-      engagement: 92,
-      recording: true,
-      transcript: true,
-      report: true
-    },
-    {
-      id: 2,
-      title: 'Quantum Mechanics Introduction',
-      tutor: 'Prof. Michael Chen',
-      subject: 'Physics',
-      date: '2025-01-07',
-      time: '10:00 AM',
-      duration: 45,
-      status: 'completed',
-      engagement: 88,
-      recording: true,
-      transcript: true,
-      report: true
-    },
-    {
-      id: 3,
-      title: 'Organic Chemistry Basics',
-      tutor: 'Dr. Emily Rodriguez',
-      subject: 'Chemistry',
-      date: '2025-01-09',
-      time: '2:00 PM',
-      duration: 60,
-      status: 'scheduled',
-      engagement: null,
-      recording: false,
-      transcript: false,
-      report: false
-    }
-  ];
+  const { user } = useAuth();
+  const [sessions, setSessions] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const fetchSessions = async () => {
+      if (!user) return;
+      setLoading(true);
+      const { data, error } = await dbHelpers.getSessionsWithDetails(user.id, 'student');
+      if (!error && data) {
+        setSessions(data);
+      }
+      setLoading(false);
+    };
+    fetchSessions();
+  }, [user]);
 
   const filteredSessions = sessions.filter(session => {
     const matchesFilter = filter === 'all' || session.status === filter;
-    const matchesSearch = session.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         session.tutor.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         session.subject.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch =
+      (session.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      session.tutor?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      session.subject?.toLowerCase().includes(searchTerm.toLowerCase()));
     return matchesFilter && matchesSearch;
   });
 
@@ -153,119 +128,130 @@ const SessionsTab: React.FC = () => {
 
       {/* Sessions List */}
       <div className="space-y-4">
-        {filteredSessions.map((session, index) => (
-          <motion.div
-            key={session.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-            className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10 hover:border-white/20 transition-all duration-200"
-          >
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-              {/* Session Info */}
-              <div className="flex items-start space-x-4 flex-1">
-                <div className="p-3 bg-primary-500/10 rounded-xl flex-shrink-0">
-                  <Video className="h-6 w-6 text-primary-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-lg font-semibold text-white mb-1">{session.title}</h3>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-400">
-                    <div className="flex items-center space-x-1">
-                      <User className="h-4 w-4" />
-                      <span>{session.tutor}</span>
+        {loading ? (
+          <div className="flex items-center justify-center h-40">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-500"></div>
+          </div>
+        ) : filteredSessions.length === 0 ? (
+          <div className="text-center py-12">
+            <Video className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-white mb-2">No Sessions Found</h3>
+            <p className="text-gray-400">
+              {searchTerm ? 'No sessions match your search criteria.' : 'No sessions available for the selected filter.'}
+            </p>
+          </div>
+        ) : (
+          filteredSessions.map((session, index) => {
+            const tutorName = session.tutor?.name || 'Unknown';
+            const dateObj = session.scheduled_at ? new Date(session.scheduled_at) : null;
+            const date = dateObj ? dateObj.toLocaleDateString() : '-';
+            const time = dateObj ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-';
+            const engagement = session.engagement_score ?? null;
+            return (
+              <motion.div
+                key={session.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.1 }}
+                className="bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10 hover:border-white/20 transition-all duration-200"
+              >
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  {/* Session Info */}
+                  <div className="flex items-start space-x-4 flex-1">
+                    <div className="p-3 bg-primary-500/10 rounded-xl flex-shrink-0">
+                      <Video className="h-6 w-6 text-primary-500" />
                     </div>
-                    <div className="flex items-center space-x-1">
-                      <Calendar className="h-4 w-4" />
-                      <span>{session.date} at {session.time}</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <Clock className="h-4 w-4" />
-                      <span>{session.duration} min</span>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-lg font-semibold text-white mb-1">{session.title}</h3>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-400">
+                        <div className="flex items-center space-x-1">
+                          <User className="h-4 w-4" />
+                          <span>{tutorName}</span>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <Calendar className="h-4 w-4" />
+                          <span>{date} at {time}</span>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <Clock className="h-4 w-4" />
+                          <span>{session.duration_minutes} min</span>
+                        </div>
+                      </div>
+                      <div className="mt-2">
+                        <span className="text-sm text-gray-500">Subject: </span>
+                        <span className="text-sm text-primary-400">{session.subject}</span>
+                      </div>
                     </div>
                   </div>
-                  <div className="mt-2">
-                    <span className="text-sm text-gray-500">Subject: </span>
-                    <span className="text-sm text-primary-400">{session.subject}</span>
-                  </div>
-                </div>
-              </div>
 
-              {/* Status and Actions */}
-              <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4">
-                {/* Status */}
-                <div className="flex flex-col items-start lg:items-end">
-                  <div className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBg(session.status)} ${getStatusColor(session.status)}`}>
-                    {session.status.charAt(0).toUpperCase() + session.status.slice(1)}
-                  </div>
-                  {session.engagement && (
-                    <div className="text-sm text-gray-400 mt-1">
-                      Engagement: <span className="text-accent-emerald">{session.engagement}%</span>
+                  {/* Status and Actions */}
+                  <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4">
+                    {/* Status */}
+                    <div className="flex flex-col items-start lg:items-end">
+                      <div className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBg(session.status)} ${getStatusColor(session.status)}`}>
+                        {session.status.charAt(0).toUpperCase() + session.status.slice(1)}
+                      </div>
+                      {engagement && (
+                        <div className="text-sm text-gray-400 mt-1">
+                          Engagement: <span className="text-accent-emerald">{engagement}%</span>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
 
-                {/* Actions */}
-                <div className="flex items-center space-x-2">
-                  {session.status === 'completed' && (
-                    <>
-                      {session.recording && (
+                    {/* Actions */}
+                    <div className="flex items-center space-x-2">
+                      {session.status === 'completed' && (
+                        <>
+                          {session.recording && (
+                            <motion.button
+                              className="p-2 bg-primary-500/20 text-primary-400 rounded-lg hover:bg-primary-500/30 transition-colors duration-200"
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.95 }}
+                              title="Download Recording"
+                            >
+                              <Download className="h-4 w-4" />
+                            </motion.button>
+                          )}
+                          {session.transcript && (
+                            <motion.button
+                              className="p-2 bg-accent-emerald/20 text-accent-emerald rounded-lg hover:bg-accent-emerald/30 transition-colors duration-200"
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.95 }}
+                              title="View Transcript"
+                            >
+                              <FileText className="h-4 w-4" />
+                            </motion.button>
+                          )}
+                          {session.report && (
+                            <motion.button
+                              className="p-2 bg-purple-500/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors duration-200"
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.95 }}
+                              title="Download Report"
+                            >
+                              <FileText className="h-4 w-4" />
+                            </motion.button>
+                          )}
+                        </>
+                      )}
+                      {session.status === 'scheduled' && (
                         <motion.button
-                          className="p-2 bg-primary-500/20 text-primary-400 rounded-lg hover:bg-primary-500/30 transition-colors duration-200"
-                          whileHover={{ scale: 1.1 }}
+                          onClick={() => joinSession(session)}
+                          className="px-4 py-2 bg-accent-emerald text-white rounded-lg hover:bg-accent-emerald/80 transition-colors duration-200 text-sm font-medium"
+                          whileHover={{ scale: 1.05 }}
                           whileTap={{ scale: 0.95 }}
-                          title="Download Recording"
                         >
-                          <Download className="h-4 w-4" />
+                          Join Session
                         </motion.button>
                       )}
-                      {session.transcript && (
-                        <motion.button
-                          className="p-2 bg-accent-emerald/20 text-accent-emerald rounded-lg hover:bg-accent-emerald/30 transition-colors duration-200"
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.95 }}
-                          title="View Transcript"
-                        >
-                          <FileText className="h-4 w-4" />
-                        </motion.button>
-                      )}
-                      {session.report && (
-                        <motion.button
-                          className="p-2 bg-purple-500/20 text-purple-400 rounded-lg hover:bg-purple-500/30 transition-colors duration-200"
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.95 }}
-                          title="Download Report"
-                        >
-                          <FileText className="h-4 w-4" />
-                        </motion.button>
-                      )}
-                    </>
-                  )}
-                  {session.status === 'scheduled' && (
-                    <motion.button
-                      onClick={() => joinSession(session)}
-                      className="px-4 py-2 bg-accent-emerald text-white rounded-lg hover:bg-accent-emerald/80 transition-colors duration-200 text-sm font-medium"
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      Join Session
-                    </motion.button>
-                  )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          </motion.div>
-        ))}
+              </motion.div>
+            );
+          })
+        )}
       </div>
-
-      {filteredSessions.length === 0 && (
-        <div className="text-center py-12">
-          <Video className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-white mb-2">No Sessions Found</h3>
-          <p className="text-gray-400">
-            {searchTerm ? 'No sessions match your search criteria.' : 'No sessions available for the selected filter.'}
-          </p>
-        </div>
-      )}
     </div>
   );
 };

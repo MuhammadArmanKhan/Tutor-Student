@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 import { useAuth } from '../../contexts/AuthContext';
+import { dbHelpers } from '../../lib/supabase';
 
 interface StudentProgress {
   subject: string;
@@ -35,48 +36,29 @@ const StudentProgressDashboard: React.FC = () => {
 
   useEffect(() => {
     loadProgressData();
-  }, [selectedSubject, selectedTimeframe]);
+  }, [selectedSubject, selectedTimeframe, user]);
 
   const loadProgressData = async () => {
     try {
-      // Mock data for demonstration
-      const mockProgress: StudentProgress[] = [
-        {
-          subject: 'Mathematics',
-          sessions_completed: 12,
-          total_time_minutes: 720,
-          average_engagement: 87,
-          improvement_rate: 15,
-          current_level: 'Advanced',
-          next_milestone: 'Calculus Mastery',
-          strengths: ['Problem Solving', 'Logical Thinking', 'Pattern Recognition'],
-          areas_for_improvement: ['Speed', 'Complex Word Problems']
-        },
-        {
-          subject: 'Physics',
-          sessions_completed: 8,
-          total_time_minutes: 480,
-          average_engagement: 92,
-          improvement_rate: 22,
-          current_level: 'Intermediate',
-          next_milestone: 'Quantum Mechanics Basics',
-          strengths: ['Conceptual Understanding', 'Mathematical Application'],
-          areas_for_improvement: ['Laboratory Skills', 'Graph Interpretation']
-        },
-        {
-          subject: 'Chemistry',
-          sessions_completed: 10,
-          total_time_minutes: 600,
-          average_engagement: 78,
-          improvement_rate: 8,
-          current_level: 'Intermediate',
-          next_milestone: 'Organic Chemistry',
-          strengths: ['Memorization', 'Formula Application'],
-          areas_for_improvement: ['Reaction Mechanisms', 'Balancing Equations']
-        }
-      ];
-
-      setProgressData(mockProgress);
+      if (!user) return;
+      setLoading(true);
+      const { milestones, progress } = await dbHelpers.getStudentProgress(user.id);
+      // Transform progress_tracking and milestones into the format expected by the dashboard
+      const progressData = progress.map((p: any) => {
+        const subjectMilestones = milestones.filter((m: any) => m.subject === p.subject);
+        return {
+          subject: p.subject,
+          sessions_completed: p.completed_sessions,
+          total_time_minutes: p.time_spent_minutes,
+          average_engagement: p.average_engagement,
+          improvement_rate: p.learning_velocity,
+          current_level: p.strengths?.[0] || '-',
+          next_milestone: subjectMilestones[0]?.milestone_name || '-',
+          strengths: p.strengths || [],
+          areas_for_improvement: p.areas_for_improvement || []
+        };
+      });
+      setProgressData(progressData);
     } catch (error) {
       console.error('Error loading progress data:', error);
     } finally {
